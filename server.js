@@ -88,6 +88,7 @@ if (!isProduction && (!fs.existsSync(distHtml) || process.env.NODE_ENV === "deve
 if (fs.existsSync(path.join(__dirname, "dist"))) {
   app.use(express.static(path.join(__dirname, "dist")));
 }
+app.use(express.static(path.join(__dirname, "public")));
 app.use("/public", express.static(path.join(__dirname, "public")));
 if (fs.existsSync(path.join(__dirname, "dist", "public"))) {
   app.use("/public", express.static(path.join(__dirname, "dist", "public")));
@@ -96,8 +97,10 @@ if (fs.existsSync(path.join(__dirname, "dist", "public"))) {
 app.get("*", (req, res) => {
   if (fs.existsSync(distHtml)) {
     res.sendFile(distHtml);
+  } else if (fs.existsSync(path.join(__dirname, "index.html"))) {
+    res.sendFile(path.join(__dirname, "index.html"));
   } else {
-    res.status(503).send("Application is starting or building. Please refresh in a moment.");
+    res.status(200).send("<h1>EF CPA Shop</h1><p>Application is starting up, please refresh.</p>");
   }
 });
 
