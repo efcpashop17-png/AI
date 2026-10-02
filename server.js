@@ -16,9 +16,9 @@ const EASYSLIP_TOKEN = process.env.EASYSLIP_API_KEY || '80577a63-8428-40cd-999d-
 app.use(express.json({ limit: "25mb" }));
 app.use(express.urlencoded({ extended: true, limit: "25mb" }));
 
-// Health Check Endpoint
+// Health Check Endpoint for Hostinger uptime / load balancer
 app.get("/api/health", (req, res) => {
-  res.json({
+  res.status(200).json({
     status: "ok",
     service: "EF CPA Shop",
     easySlipConfigured: !!EASYSLIP_TOKEN,
@@ -59,7 +59,7 @@ app.post("/api/verify-slip", async (req, res) => {
   }
 });
 
-// Download Endpoint for manual Hostinger deployment
+// Download Endpoint for backup
 app.get("/download-project.zip", (req, res) => {
   const filePath = path.join(__dirname, "dist", "deploy.zip");
   if (fs.existsSync(filePath)) {
@@ -70,9 +70,9 @@ app.get("/download-project.zip", (req, res) => {
 });
 
 const distHtml = path.join(__dirname, "dist", "index.html");
-const isProduction = process.env.NODE_ENV === "production" || (!process.env.NODE_ENV && fs.existsSync(distHtml));
 
-if (!isProduction && (!fs.existsSync(distHtml) || process.env.NODE_ENV === "development")) {
+// If not production and in dev mode without prebuilt html, enable Vite middleware
+if (process.env.NODE_ENV === "development" && !fs.existsSync(distHtml)) {
   try {
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
@@ -81,10 +81,11 @@ if (!isProduction && (!fs.existsSync(distHtml) || process.env.NODE_ENV === "deve
     });
     app.use(vite.middlewares);
   } catch (err) {
-    console.warn("Failed to load Vite middleware, falling back to static files:", err);
+    console.warn("Vite middleware not available, falling back to static:", err);
   }
 }
 
+// Serve static frontend files from dist and public
 if (fs.existsSync(path.join(__dirname, "dist"))) {
   app.use(express.static(path.join(__dirname, "dist")));
 }
@@ -94,22 +95,33 @@ if (fs.existsSync(path.join(__dirname, "dist", "public"))) {
   app.use("/public", express.static(path.join(__dirname, "dist", "public")));
 }
 
+// Fallback to index.html for all SPA routes
 app.get("*", (req, res) => {
   if (fs.existsSync(distHtml)) {
     res.sendFile(distHtml);
   } else if (fs.existsSync(path.join(__dirname, "index.html"))) {
     res.sendFile(path.join(__dirname, "index.html"));
   } else {
-    res.status(200).send("<h1>EF CPA Shop</h1><p>Application is starting up, please refresh.</p>");
+    res.status(200).send("<!DOCTYPE html><html><head><title>EF CPA Shop</title></head><body><h1>EF CPA Shop</h1><p>Starting up... please refresh.</p></body></html>");
   }
 });
 
-if (isNaN(Number(PORT))) {
-  app.listen(PORT, () => {
-    console.log(`Server running on socket ${PORT}`);
+// Global error handling to prevent server crash
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught Exception:", err);
+});
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("Unhandled Rejection:", reason);
+});
+
+// Start listening
+const serverPort = isNaN(Number(PORT)) ? PORT : Number(PORT);
+if (typeof serverPort === "number") {
+  app.listen(serverPort, "0.0.0.0", () => {
+    console.log(`EF CPA Shop server active and listening on port ${serverPort}`);
   });
 } else {
-  app.listen(Number(PORT), "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+  app.listen(serverPort, () => {
+    console.log(`EF CPA Shop server listening on socket ${serverPort}`);
   });
 }
