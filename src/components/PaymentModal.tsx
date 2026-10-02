@@ -120,7 +120,11 @@ export const PaymentModal: React.FC = () => {
     });
   };
 
-  const handleSimulatePayment = () => {
+  const handleConfirmOrderPayment = () => {
+    if (!isPaid && !slipUrl) {
+      fileInputRef.current?.click();
+      return;
+    }
     setIsProcessing(true);
     setNotification({
       type: 'info',
@@ -161,28 +165,6 @@ export const PaymentModal: React.FC = () => {
         message: `🎉 ชำระเงินด้วยเครดิตคงเหลือสำเร็จ! หัก ฿${order.price.toLocaleString()} และเริ่มจัดส่งสต็อกทันที`,
       });
     }, 600);
-  };
-
-  const handleUploadSampleSlip = () => {
-    const sampleSlip =
-      'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="400" viewBox="0 0 300 400"><rect width="300" height="400" fill="%231e293b"/><text x="150" y="50" fill="%2310b981" font-size="18" font-family="sans-serif" font-weight="bold" text-anchor="middle">โอนเงินสำเร็จ</text><text x="150" y="90" fill="%23ffffff" font-size="24" font-family="sans-serif" font-weight="bold" text-anchor="middle">฿' +
-      order.price +
-      '</text><text x="30" y="150" fill="%2394a3b8" font-size="12" font-family="sans-serif">รหัสคำสั่งซื้อ:</text><text x="30" y="175" fill="%23f59e0b" font-size="14" font-family="sans-serif" font-weight="bold">' +
-      order.id +
-      '</text><text x="30" y="215" fill="%2394a3b8" font-size="12" font-family="sans-serif">เกม:</text><text x="30" y="240" fill="%23ffffff" font-size="14" font-family="sans-serif" font-weight="bold">' +
-      order.gameName +
-      '</text><text x="30" y="280" fill="%2394a3b8" font-size="12" font-family="sans-serif">เวลาที่โอน:</text><text x="30" y="305" fill="%23ffffff" font-size="14" font-family="sans-serif">' +
-      new Date().toLocaleTimeString('th-TH') +
-      '</text></svg>';
-
-    setEasySlipResult({
-      success: true,
-      verified: true,
-      amount: order.price,
-      transRef: `DEMO-${Date.now()}`,
-      message: 'แนบสลิปทดสอบด่วนเรียบร้อย (Verified Demo)',
-    });
-    processSlipAttachment(sampleSlip);
   };
 
   const handleRealFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -550,7 +532,7 @@ export const PaymentModal: React.FC = () => {
               type="button"
               disabled={isVerifyingSlip}
               onClick={() => fileInputRef.current?.click()}
-              className="py-2.5 px-3 rounded-xl bg-[#18113c] hover:bg-[#231854] border border-violet-500/40 hover:border-cyan-400 text-xs font-bold text-violet-200 hover:text-white flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm"
+              className="w-full py-3 px-4 rounded-xl bg-[#18113c] hover:bg-[#231854] border border-violet-500/40 hover:border-cyan-400 text-xs font-bold text-violet-200 hover:text-white flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm"
             >
               {isVerifyingSlip ? (
                 <>
@@ -560,18 +542,9 @@ export const PaymentModal: React.FC = () => {
               ) : (
                 <>
                   <ImageIcon className="w-4 h-4 text-cyan-400" />
-                  <span>{isPaid ? 'เปลี่ยนรูปสลิปจากเครื่อง' : 'อัปโหลดสลิปจากเครื่อง'}</span>
+                  <span>{isPaid ? 'เปลี่ยนรูปสลิปจากเครื่อง' : 'เลือกและอัปโหลดสลิปโอนเงิน (JPG / PNG)'}</span>
                 </>
               )}
-            </button>
-
-            <button
-              type="button"
-              onClick={handleUploadSampleSlip}
-              className="py-2.5 px-3 rounded-xl bg-[#120E24] hover:bg-[#1B1433] border border-violet-500/30 text-xs text-violet-300 hover:text-white font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span>แนบสลิปตัวอย่าง (Quick Slip)</span>
             </button>
           </div>
 
@@ -608,12 +581,12 @@ export const PaymentModal: React.FC = () => {
           )}
         </div>
 
-        {/* PRIMARY ACTION: Simulate instant payment verification */}
+        {/* PRIMARY ACTION: Real payment confirmation & delivery */}
         <div className="space-y-3">
           <button
             type="button"
             disabled={isProcessing}
-            onClick={handleSimulatePayment}
+            onClick={handleConfirmOrderPayment}
             className="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 text-slate-950 font-extrabold text-base shadow-[0_0_20px_rgba(16,185,129,0.4)] flex items-center justify-center gap-2 transition-all transform active:scale-98 cursor-pointer font-heading"
           >
             {isProcessing ? (
@@ -622,9 +595,9 @@ export const PaymentModal: React.FC = () => {
               <>
                 <CheckCircle2 className="w-5 h-5 fill-current" />
                 <span>
-                  {isPaid
-                    ? 'ยืนยันและจัดส่งสต็อกเข้าไอดีทันที'
-                    : 'จำลองการสแกนจ่ายสำเร็จ (กดเพื่อจัดส่งสต็อกเข้าไอดีทันที)'}
+                  {isPaid || slipUrl
+                    ? 'ยืนยันและเริ่มจัดส่งสต็อกเข้าไอดีทันที'
+                    : 'แนบสลิปโอนเงินเพื่อยืนยันคำสั่งซื้อ'}
                 </span>
               </>
             )}

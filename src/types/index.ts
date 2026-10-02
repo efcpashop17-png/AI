@@ -9,6 +9,7 @@ export interface GamePackage {
   isHot?: boolean;
   badge?: string;
   active: boolean;
+  imageUrl?: string;       // รูปภาพแพ็กเกจ (URL หรือรูปภาพที่แอดมินอัปโหลด)
 }
 
 export interface GameAccountField {
@@ -64,6 +65,7 @@ export interface CartItem {
   serverId?: string;
   zoneId?: string;
   playerNamePreview?: string;
+  imageUrl?: string;
 }
 
 export type PaymentMethod = 'promptpay' | 'truemoney' | 'bank_transfer';
@@ -99,6 +101,7 @@ export interface TopUpOrder {
   playerNamePreview?: string;
   items?: CartItem[];
   quantity?: number;
+  packageImageUrl?: string;
   originalPrice: number;
   price: number;
   customerName?: string;

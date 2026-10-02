@@ -116,29 +116,6 @@ export const OrderTrackingView: React.FC = () => {
     }
   };
 
-  const handleQuickDemoSlip = () => {
-    if (!selectedOrder) return;
-    const sampleSlip =
-      'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="400" viewBox="0 0 300 400"><rect width="300" height="400" fill="%231e293b"/><text x="150" y="50" fill="%2310b981" font-size="18" font-family="sans-serif" font-weight="bold" text-anchor="middle">โอนเงินสำเร็จ</text><text x="150" y="90" fill="%23ffffff" font-size="24" font-family="sans-serif" font-weight="bold" text-anchor="middle">฿' +
-      selectedOrder.price +
-      '</text><text x="30" y="150" fill="%2394a3b8" font-size="12" font-family="sans-serif">รหัสคำสั่งซื้อ:</text><text x="30" y="175" fill="%23f59e0b" font-size="14" font-family="sans-serif" font-weight="bold">' +
-      selectedOrder.id +
-      '</text><text x="30" y="215" fill="%2394a3b8" font-size="12" font-family="sans-serif">เกม:</text><text x="30" y="240" fill="%23ffffff" font-size="14" font-family="sans-serif" font-weight="bold">' +
-      selectedOrder.gameName +
-      '</text><text x="30" y="280" fill="%2394a3b8" font-size="12" font-family="sans-serif">เวลาที่โอน:</text><text x="30" y="305" fill="%23ffffff" font-size="14" font-family="sans-serif">' +
-      new Date().toLocaleTimeString('th-TH') +
-      '</text></svg>';
-
-    setEasySlipResult({
-      success: true,
-      verified: true,
-      amount: selectedOrder.price,
-      transRef: `DEMO-${Date.now()}`,
-      message: 'แนบสลิปทดสอบด่วนเรียบร้อย (Verified Demo)',
-    });
-    attachSlipAndMarkPaid(selectedOrder.id, sampleSlip);
-  };
-
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 animate-fadeIn">
       {/* Header */}
@@ -309,7 +286,12 @@ export const OrderTrackingView: React.FC = () => {
                 {/* 2. เเพ็กเกจที่เลือก */}
                 <div className="space-y-1">
                   <span className="text-slate-400 font-bold">2. เเพ็กเกจที่เลือก:</span>
-                  <p className="font-black text-white text-sm">{selectedOrder.packageName}</p>
+                  <div className="flex items-center gap-2">
+                    {selectedOrder.packageImageUrl && (
+                      <img src={selectedOrder.packageImageUrl} alt="" className="w-7 h-7 rounded-lg object-cover border border-slate-700 shrink-0 shadow-sm" />
+                    )}
+                    <p className="font-black text-white text-sm">{selectedOrder.packageName}</p>
+                  </div>
                 </div>
 
                 {/* 3. ชื่อ User */}
@@ -482,13 +464,6 @@ export const OrderTrackingView: React.FC = () => {
                               <span>แนบสลิปโอนเงิน</span>
                             </>
                           )}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleQuickDemoSlip}
-                          className="px-3 py-2 rounded-xl bg-[#1b2234] hover:bg-[#242f48] text-slate-200 text-xs font-bold border border-slate-600 cursor-pointer"
-                        >
-                          สลิปตัวอย่าง
                         </button>
                       </div>
                     </div>

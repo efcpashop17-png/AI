@@ -141,22 +141,29 @@ export const CartDrawer: React.FC = () => {
                       className="p-4.5 rounded-2xl bg-[#120E24]/90 border border-violet-500/30 space-y-3.5 relative overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.6)]"
                     >
                       <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <span className="text-[11px] font-bold uppercase px-2.5 py-0.5 rounded-md bg-violet-950/80 text-violet-300 border border-violet-600/40">
-                            {item.gameName}
-                          </span>
-                          <h4 className="font-extrabold text-base text-white mt-1.5 leading-snug font-heading">
-                            {item.packageName}
-                          </h4>
-                          <p className="text-xs font-mono font-bold text-cyan-400 mt-1">
-                            UID: {item.playerUid}
-                            {item.serverId ? ` (${item.serverId})` : ''}
-                          </p>
-                          {item.playerNamePreview && (
-                            <p className="text-xs text-violet-200/80 font-medium mt-0.5">
-                              ตัวละคร: {item.playerNamePreview}
-                            </p>
+                        <div className="flex items-start gap-3 min-w-0 flex-1">
+                          {item.imageUrl && (
+                            <div className="w-12 h-12 rounded-xl overflow-hidden bg-black/60 border border-violet-500/40 shrink-0 shadow-sm mt-1">
+                              <img src={item.imageUrl} alt={item.packageName} className="w-full h-full object-cover" />
+                            </div>
                           )}
+                          <div className="min-w-0 flex-1">
+                            <span className="text-[11px] font-bold uppercase px-2.5 py-0.5 rounded-md bg-violet-950/80 text-violet-300 border border-violet-600/40">
+                              {item.gameName}
+                            </span>
+                            <h4 className="font-extrabold text-base text-white mt-1.5 leading-snug font-heading">
+                              {item.packageName}
+                            </h4>
+                            <p className="text-xs font-mono font-bold text-cyan-400 mt-1">
+                              UID: {item.playerUid}
+                              {item.serverId ? ` (${item.serverId})` : ''}
+                            </p>
+                            {item.playerNamePreview && (
+                              <p className="text-xs text-violet-200/80 font-medium mt-0.5">
+                                ตัวละคร: {item.playerNamePreview}
+                              </p>
+                            )}
+                          </div>
                         </div>
 
                         <button

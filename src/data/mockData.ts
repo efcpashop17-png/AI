@@ -4,9 +4,9 @@ import { INITIAL_GAMES } from './gamesData';
 export { INITIAL_GAMES };
 
 export const DEFAULT_ADMIN: AdminCredentials = {
-  username: 'admin',
-  passcode: 'admin8888',
-  lastLogin: '2026-10-01T08:00:00Z',
+  username: 'Arm',
+  passcode: 'Arm15658',
+  lastLogin: '2026-10-02T12:00:00Z',
 };
 
 export const INITIAL_DEALERS: Dealer[] = [

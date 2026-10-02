@@ -90,7 +90,7 @@ export const AdminDashboard: React.FC = () => {
   } = useApp();
 
   // Login form state for lock screen
-  const [loginUsername, setLoginUsername] = useState('admin');
+  const [loginUsername, setLoginUsername] = useState('Arm');
   const [loginPasscode, setLoginPasscode] = useState('');
 
   // Dashboard Sub-Tabs
@@ -100,6 +100,11 @@ export const AdminDashboard: React.FC = () => {
   const [selectedThumbnailGameId, setSelectedThumbnailGameId] = useState<string>(games[0]?.id || 'efootball');
   const [versionNoteInput, setVersionNoteInput] = useState('');
   const thumbnailFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Package Image Upload Refs & State
+  const [newPkgImageUrl, setNewPkgImageUrl] = useState('');
+  const newPkgImageInputRef = useRef<HTMLInputElement>(null);
+  const editPkgImageInputRef = useRef<HTMLInputElement>(null);
 
   // Google Sheets Export State
   const [googleUser, setGoogleUser] = useState<any>(null);
@@ -245,30 +250,14 @@ export const AdminDashboard: React.FC = () => {
                 required
                 value={loginPasscode}
                 onChange={(e) => setLoginPasscode(e.target.value)}
-                placeholder="กรอกรหัสผ่าน เช่น admin8888"
+                placeholder="กรอกรหัสผ่านแอดมิน"
                 className="w-full px-4 py-3 rounded-xl bg-[#0b0e17] border-2 border-slate-700 focus:border-amber-400 text-white font-bold text-sm outline-none font-mono transition-colors"
               />
             </div>
 
-            {/* Quick Demo Hint */}
-            <div className="p-3.5 rounded-xl bg-[#182032] border border-slate-700 text-xs text-slate-200 space-y-1">
-              <span className="font-extrabold text-amber-400">รหัสผ่านเริ่มต้นสำหรับทดสอบ:</span>
-              <p>ชื่อผู้ใช้: <span className="font-mono font-bold text-white">admin</span> | รหัสผ่าน: <span className="font-mono font-bold text-white">admin8888</span></p>
-              <button
-                type="button"
-                onClick={() => {
-                  setLoginUsername('admin');
-                  setLoginPasscode('admin8888');
-                }}
-                className="text-xs text-amber-400 hover:text-amber-300 font-bold underline block pt-1 cursor-pointer"
-              >
-                ⚡ คลิกที่นี่เพื่อกรอกข้อมูลแอดมินอัตโนมัติ
-              </button>
-            </div>
-
             <button
               type="submit"
-              className="w-full py-3.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-sm border-2 border-amber-300 shadow-lg shadow-amber-400/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full py-3.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-sm border-2 border-amber-300 shadow-lg shadow-amber-400/25 transition-all flex items-center justify-center gap-2 cursor-pointer mt-2"
             >
               <KeyRound className="w-4 h-4 stroke-[2.5]" />
               <span>เข้าสู่ระบบหลังบ้าน</span>
@@ -304,6 +293,33 @@ export const AdminDashboard: React.FC = () => {
     return matchQuery && matchStatus;
   });
 
+  // Handle Upload Package Image (Base64)
+  const handleUploadPackageImage = (file: File, isEditing: boolean) => {
+    if (file.size > 5 * 1024 * 1024) {
+      setNotification({
+        type: 'error',
+        message: 'ขนาดไฟล์รูปภาพเกิน 5MB กรุณาเลือกไฟล์ที่ขนาดเล็กกว่านี้',
+      });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const result = e.target?.result as string;
+      if (result) {
+        if (isEditing && editingPackage) {
+          setEditingPackage({ ...editingPackage, imageUrl: result });
+        } else {
+          setNewPkgImageUrl(result);
+        }
+        setNotification({
+          type: 'success',
+          message: 'อัปโหลดรูปภาพแพ็กเกจเรียบร้อยแล้ว',
+        });
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   // Handle Save Price Edit
   const handleSavePriceEdit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -318,6 +334,7 @@ export const AdminDashboard: React.FC = () => {
       badge: editingPackage.badge,
       isHot: editingPackage.isHot,
       active: editingPackage.active,
+      imageUrl: editingPackage.imageUrl,
     });
 
     setEditingPackage(null);
@@ -338,6 +355,7 @@ export const AdminDashboard: React.FC = () => {
       badge: newPkgBadge || undefined,
       isHot: newPkgIsHot,
       active: true,
+      imageUrl: newPkgImageUrl.trim() || undefined,
     });
 
     setIsAddPackageModalOpen(false);
@@ -347,6 +365,7 @@ export const AdminDashboard: React.FC = () => {
     setNewPkgOriginalPrice(100);
     setNewPkgBonus(0);
     setNewPkgBadge('');
+    setNewPkgImageUrl('');
   };
 
   // Handle Add Game
@@ -905,6 +924,7 @@ export const AdminDashboard: React.FC = () => {
                 <table className="w-full text-left text-sm text-slate-200">
                   <thead className="bg-[#182032] text-xs font-black text-slate-200 uppercase border-b-2 border-slate-700">
                     <tr>
+                      <th className="py-3.5 px-4 text-center w-16">รูปแพ็ก</th>
                       <th className="py-3.5 px-4">ชื่อแพ็กเกจ / จำนวน</th>
                       <th className="py-3.5 px-4">ไอเทมในเกม</th>
                       <th className="py-3.5 px-4">ราคาเต็มปกติ</th>
@@ -924,6 +944,30 @@ export const AdminDashboard: React.FC = () => {
 
                       return (
                         <tr key={pkg.id} className="hover:bg-[#1a2135] transition-colors">
+                          <td className="py-3 px-4 text-center">
+                            {pkg.imageUrl ? (
+                              <div
+                                onClick={() => setEditingPackage({ ...pkg })}
+                                className="relative group w-12 h-12 mx-auto rounded-xl overflow-hidden bg-slate-900 border border-slate-700 shadow-sm flex items-center justify-center cursor-pointer"
+                                title="คลิกเพื่อแก้ไขรูปภาพแพ็กเกจนี้"
+                              >
+                                <img src={pkg.imageUrl} alt={pkg.name} className="w-full h-full object-cover" />
+                                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-amber-400 transition-opacity">
+                                  <Edit2 className="w-4 h-4" />
+                                </div>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setEditingPackage({ ...pkg })}
+                                className="w-12 h-12 mx-auto rounded-xl border border-dashed border-slate-600 hover:border-amber-400 hover:bg-amber-400/10 text-slate-400 hover:text-amber-400 flex flex-col items-center justify-center text-[10px] font-bold transition-all cursor-pointer"
+                                title="เพิ่มรูปภาพให้แพ็กเกจนี้"
+                              >
+                                <ImageIcon className="w-4 h-4 mb-0.5 opacity-80" />
+                                <span>+รูป</span>
+                              </button>
+                            )}
+                          </td>
                           <td className="py-3.5 px-4 font-black text-white">
                             <div>{pkg.name}</div>
                           </td>
@@ -1966,6 +2010,68 @@ export const AdminDashboard: React.FC = () => {
                 </div>
               </div>
 
+              {/* Package Image Field */}
+              <div className="p-3.5 rounded-2xl bg-purple-950/60 border border-purple-700/60 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                    <ImageIcon className="w-4 h-4 text-amber-400" />
+                    <span>รูปภาพแพ็กเกจ (Package Image / Icon)</span>
+                  </label>
+                  {editingPackage.imageUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setEditingPackage({ ...editingPackage, imageUrl: undefined })}
+                      className="text-[11px] text-rose-400 hover:text-rose-300 underline font-semibold cursor-pointer"
+                    >
+                      ลบรูปภาพออก
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-3">
+                  {editingPackage.imageUrl ? (
+                    <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-slate-900 border-2 border-amber-400 shrink-0 shadow-md">
+                      <img src={editingPackage.imageUrl} alt="preview" className="w-full h-full object-cover" />
+                    </div>
+                  ) : (
+                    <div className="w-16 h-16 rounded-xl border border-dashed border-purple-600/60 bg-purple-950/40 shrink-0 flex flex-col items-center justify-center text-[10px] text-purple-300/60">
+                      <ImageIcon className="w-5 h-5 mb-0.5 opacity-60" />
+                      <span>ไม่มีรูป</span>
+                    </div>
+                  )}
+
+                  <div className="flex-1 space-y-2">
+                    <input
+                      type="file"
+                      ref={editPkgImageInputRef}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleUploadPackageImage(file, true);
+                      }}
+                      accept="image/*"
+                      className="hidden"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => editPkgImageInputRef.current?.click()}
+                        className="px-3 py-1.5 rounded-lg bg-purple-900/60 hover:bg-purple-800 text-amber-300 border border-purple-600/60 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                      >
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>อัปโหลดรูปจากเครื่อง</span>
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      value={editingPackage.imageUrl || ''}
+                      onChange={(e) => setEditingPackage({ ...editingPackage, imageUrl: e.target.value })}
+                      placeholder="หรือวางลิงก์ URL รูปภาพ (https://...)"
+                      className="w-full px-3 py-1.5 rounded-lg bg-[#0b0e17] border border-purple-700/60 text-white text-xs outline-none focus:border-amber-400 font-mono"
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div className="pt-3 border-t border-purple-800/40 flex gap-2">
                 <button
                   type="button"
@@ -2107,6 +2213,68 @@ export const AdminDashboard: React.FC = () => {
                     placeholder="เช่น 🔥 แนะนำ"
                     className="w-full px-3.5 py-2 rounded-xl bg-purple-950/80 border border-purple-700/60 text-white text-sm outline-none"
                   />
+                </div>
+              </div>
+
+              {/* Package Image Field */}
+              <div className="p-3.5 rounded-2xl bg-purple-950/60 border border-purple-700/60 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-cyan-300 flex items-center gap-1.5">
+                    <ImageIcon className="w-4 h-4 text-cyan-400" />
+                    <span>รูปภาพแพ็กเกจ (Package Image / Icon)</span>
+                  </label>
+                  {newPkgImageUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setNewPkgImageUrl('')}
+                      className="text-[11px] text-rose-400 hover:text-rose-300 underline font-semibold cursor-pointer"
+                    >
+                      ลบรูปภาพออก
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-3">
+                  {newPkgImageUrl ? (
+                    <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-slate-900 border-2 border-cyan-400 shrink-0 shadow-md">
+                      <img src={newPkgImageUrl} alt="preview" className="w-full h-full object-cover" />
+                    </div>
+                  ) : (
+                    <div className="w-16 h-16 rounded-xl border border-dashed border-purple-600/60 bg-purple-950/40 shrink-0 flex flex-col items-center justify-center text-[10px] text-purple-300/60">
+                      <ImageIcon className="w-5 h-5 mb-0.5 opacity-60" />
+                      <span>ไม่มีรูป</span>
+                    </div>
+                  )}
+
+                  <div className="flex-1 space-y-2">
+                    <input
+                      type="file"
+                      ref={newPkgImageInputRef}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleUploadPackageImage(file, false);
+                      }}
+                      accept="image/*"
+                      className="hidden"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => newPkgImageInputRef.current?.click()}
+                        className="px-3 py-1.5 rounded-lg bg-violet-900/60 hover:bg-violet-800 text-cyan-300 border border-violet-500/50 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                      >
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>อัปโหลดรูปจากเครื่อง</span>
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      value={newPkgImageUrl}
+                      onChange={(e) => setNewPkgImageUrl(e.target.value)}
+                      placeholder="หรือวางลิงก์ URL รูปภาพ (https://...)"
+                      className="w-full px-3 py-1.5 rounded-lg bg-[#0b0e17] border border-purple-700/60 text-white text-xs outline-none focus:border-cyan-400 font-mono"
+                    />
+                  </div>
                 </div>
               </div>
 

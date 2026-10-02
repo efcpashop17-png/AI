@@ -402,11 +402,27 @@ export const GameTopUpModal: React.FC<GameTopUpModalProps> = ({ game, onClose })
                     </div>
 
                     {/* Package Name & Amount */}
-                    <div className="my-1.5">
-                      <h4 className="font-extrabold text-base text-white line-clamp-1 font-heading">
-                        {pkg.name}
-                      </h4>
-                    </div>
+                    {pkg.imageUrl ? (
+                      <div className="flex items-center gap-3 my-2">
+                        <div className="w-14 h-14 rounded-xl overflow-hidden bg-black/60 border border-violet-500/40 shrink-0 shadow-inner flex items-center justify-center">
+                          <img src={pkg.imageUrl} alt={pkg.name} className="w-full h-full object-cover" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h4 className="font-extrabold text-sm sm:text-base text-white line-clamp-2 font-heading leading-tight">
+                            {pkg.name}
+                          </h4>
+                          <span className="text-[11px] text-cyan-300 font-mono font-medium block mt-0.5">
+                            {pkg.inGameItem}
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="my-1.5">
+                        <h4 className="font-extrabold text-base text-white line-clamp-1 font-heading">
+                          {pkg.name}
+                        </h4>
+                      </div>
+                    )}
 
                     {/* Price Tag */}
                     <div className="pt-2.5 mt-2 border-t border-violet-500/20 flex items-baseline justify-between">

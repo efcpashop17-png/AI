@@ -22,7 +22,7 @@ export const AdminLoginModal: React.FC = () => {
   } = useApp();
 
   const [loginMode, setLoginMode] = useState<'admin' | 'customer'>('customer');
-  const [username, setUsername] = useState('admin');
+  const [username, setUsername] = useState('Arm');
   const [passcode, setPasscode] = useState('');
 
   if (!isAdminLoginModalOpen) return null;
@@ -40,18 +40,6 @@ export const AdminLoginModal: React.FC = () => {
         setIsAdminLoginModalOpen(false);
       }
     }
-  };
-
-  const fillAdminCreds = () => {
-    setLoginMode('admin');
-    setUsername('admin');
-    setPasscode('admin8888');
-  };
-
-  const fillCustomerCreds = () => {
-    setLoginMode('customer');
-    setUsername('client_arm');
-    setPasscode('User@8899');
   };
 
   return (
@@ -87,7 +75,7 @@ export const AdminLoginModal: React.FC = () => {
             type="button"
             onClick={() => {
               setLoginMode('admin');
-              setUsername('admin');
+              setUsername('Arm');
               setPasscode('');
             }}
             className={`py-2 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
@@ -146,7 +134,7 @@ export const AdminLoginModal: React.FC = () => {
               required
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder={loginMode === 'admin' ? 'admin' : 'ระบุ Username ที่แอดมินมอบให้'}
+              placeholder={loginMode === 'admin' ? 'Arm' : 'ระบุ Username ที่แอดมินมอบให้'}
               className="w-full px-4 py-2.5 rounded-xl bg-[#0d111d] border-2 border-slate-700 focus:border-amber-400 text-white text-sm outline-none font-mono"
             />
           </div>
@@ -160,37 +148,14 @@ export const AdminLoginModal: React.FC = () => {
               required
               value={passcode}
               onChange={(e) => setPasscode(e.target.value)}
-              placeholder={loginMode === 'admin' ? 'เช่น admin8888' : 'รหัสผ่าน'}
+              placeholder={loginMode === 'admin' ? 'รหัสผ่านแอดมิน' : 'รหัสผ่าน'}
               className="w-full px-4 py-2.5 rounded-xl bg-[#0d111d] border-2 border-slate-700 focus:border-amber-400 text-white text-sm outline-none font-mono"
             />
           </div>
 
-          {/* Quick Demo Fill Buttons */}
-          <div className="pt-1">
-            {loginMode === 'admin' ? (
-              <button
-                type="button"
-                onClick={fillAdminCreds}
-                className="w-full p-2.5 rounded-xl bg-[#1a2135] hover:bg-[#202940] border border-slate-700/80 text-xs text-amber-300 font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                <span>กรอกรหัสแอดมินทดสอบ (admin / admin8888)</span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={fillCustomerCreds}
-                className="w-full p-2.5 rounded-xl bg-[#1a2135] hover:bg-[#202940] border border-slate-700/80 text-xs text-cyan-300 font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-                <span>ทดสอบล็อกอินลูกค้าราคาส่ง (client_arm / User@8899)</span>
-              </button>
-            )}
-          </div>
-
           <button
             type="submit"
-            className="w-full py-3.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-sm shadow-xl shadow-amber-400/25 flex items-center justify-center gap-2 transition-all cursor-pointer"
+            className="w-full py-3.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-sm shadow-xl shadow-amber-400/25 flex items-center justify-center gap-2 transition-all cursor-pointer mt-2"
           >
             <KeyRound className="w-4 h-4 text-slate-950 stroke-[2.5]" />
             <span>
