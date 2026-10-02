@@ -16,7 +16,7 @@ const EASYSLIP_TOKEN = process.env.EASYSLIP_API_KEY || '80577a63-8428-40cd-999d-
 app.use(express.json({ limit: "25mb" }));
 app.use(express.urlencoded({ extended: true, limit: "25mb" }));
 
-// Health Check Endpoint for Hostinger uptime / load balancer
+// Health Check Endpoint for Hostinger / NGINX uptime monitoring
 app.get("/api/health", (req, res) => {
   res.status(200).json({
     status: "ok",
@@ -71,21 +71,7 @@ app.get("/download-project.zip", (req, res) => {
 
 const distHtml = path.join(__dirname, "dist", "index.html");
 
-// If not production and in dev mode without prebuilt html, enable Vite middleware
-if (process.env.NODE_ENV === "development" && !fs.existsSync(distHtml)) {
-  try {
-    const { createServer: createViteServer } = await import("vite");
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-  } catch (err) {
-    console.warn("Vite middleware not available, falling back to static:", err);
-  }
-}
-
-// Serve static frontend files from dist and public
+// Serve static frontend files from dist and public directories
 if (fs.existsSync(path.join(__dirname, "dist"))) {
   app.use(express.static(path.join(__dirname, "dist")));
 }
@@ -102,11 +88,11 @@ app.get("*", (req, res) => {
   } else if (fs.existsSync(path.join(__dirname, "index.html"))) {
     res.sendFile(path.join(__dirname, "index.html"));
   } else {
-    res.status(200).send("<!DOCTYPE html><html><head><title>EF CPA Shop</title></head><body><h1>EF CPA Shop</h1><p>Starting up... please refresh.</p></body></html>");
+    res.status(200).send("<!DOCTYPE html><html><head><title>EF CPA Shop</title></head><body><h1>EF CPA Shop</h1><p>Starting up... please refresh in a moment.</p></body></html>");
   }
 });
 
-// Global error handling to prevent server crash
+// Global error handlers
 process.on("uncaughtException", (err) => {
   console.error("Uncaught Exception:", err);
 });
@@ -114,7 +100,7 @@ process.on("unhandledRejection", (reason, promise) => {
   console.error("Unhandled Rejection:", reason);
 });
 
-// Start listening
+// Start listening dynamically on process.env.PORT, binding to 0.0.0.0
 const serverPort = isNaN(Number(PORT)) ? PORT : Number(PORT);
 if (typeof serverPort === "number") {
   app.listen(serverPort, "0.0.0.0", () => {
@@ -125,3 +111,5 @@ if (typeof serverPort === "number") {
     console.log(`EF CPA Shop server listening on socket ${serverPort}`);
   });
 }
+
+export default app;
