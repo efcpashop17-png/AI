@@ -1,0 +1,103 @@
+[
+  {
+    "id": "GP-892410",
+    "customerId": "usr_001",
+    "username": "client_arm",
+    "customerName": "คุณอาร์ม ชัยพล (ลูกค้าราคาส่งประจำ)",
+    "gameId": "efootball",
+    "gameName": "eFootball",
+    "packageId": "efb-pkg-3",
+    "packageName": "1,050 eFootball Coins",
+    "inGameItem": "eFootball Coins",
+    "itemAmount": 1050,
+    "playerUid": "384-918-294",
+    "playerNamePreview": "⚡BarcaKing_TH",
+    "originalPrice": 389,
+    "price": 349,
+    "contactPhone": "089-123-4567",
+    "contactEmail": "player.efootball@gmail.com",
+    "paymentMethod": "promptpay",
+    "status": "completed",
+    "paymentStatus": "paid",
+    "createdAt": "2026-10-01 10:15:20",
+    "paidAt": "2026-10-01 10:16:45",
+    "completedAt": "2026-10-01 10:22:10",
+    "timeline": [
+      {
+        "id": "t1",
+        "status": "pending_payment",
+        "time": "10:15",
+        "description": "สร้างคำสั่งซื้อสำเร็จ รอชำระเงิน",
+        "actor": "system"
+      },
+      {
+        "id": "t2",
+        "status": "verifying",
+        "time": "10:16",
+        "description": "ลูกค้าแนบสลิป EasySlip ตรวจสอบยอด 349฿ ถูกต้อง",
+        "actor": "easyslip"
+      },
+      {
+        "id": "t3",
+        "status": "processing",
+        "time": "10:18",
+        "description": "ระบบส่งคำขอตัดสต็อกไปยังเซิร์ฟเวอร์เกม",
+        "actor": "system"
+      },
+      {
+        "id": "t4",
+        "status": "completed",
+        "time": "10:22",
+        "description": "เติมเหรียญ 1,050 eFootball Coins เข้า UID เรียบร้อย",
+        "actor": "admin"
+      }
+    ]
+  },
+  {
+    "id": "GP-892409",
+    "customerId": "usr_002",
+    "username": "shop_pro_gamer",
+    "customerName": "ร้านโปรเกมเมอร์ ขอนแก่น",
+    "gameId": "fc-mobile",
+    "gameName": "EA Sports FC Mobile",
+    "packageId": "fc-pkg-3",
+    "packageName": "1,000 FC Points",
+    "inGameItem": "FC Points",
+    "itemAmount": 1000,
+    "playerUid": "912-443-128",
+    "playerNamePreview": "MadridGalacticos_9",
+    "originalPrice": 379,
+    "price": 349,
+    "contactPhone": "092-987-6543",
+    "contactEmail": "fcmobile.pro@gmail.com",
+    "paymentMethod": "promptpay",
+    "status": "completed",
+    "paymentStatus": "paid",
+    "createdAt": "2026-10-01 09:40:00",
+    "paidAt": "2026-10-01 09:41:15",
+    "completedAt": "2026-10-01 09:48:30",
+    "timeline": [
+      {
+        "id": "t1",
+        "status": "pending_payment",
+        "time": "09:40",
+        "description": "สร้างคำสั่งซื้อสำเร็จ",
+        "actor": "system"
+      },
+      {
+        "id": "t2",
+        "status": "verifying",
+        "time": "09:41",
+        "description": "สลิปธนาคารตรวจสอบผ่าน",
+        "actor": "easyslip"
+      },
+      {
+        "id": "t3",
+        "status": "completed",
+        "time": "09:48",
+        "description": "เติม FC Points เรียบร้อย",
+        "actor": "system"
+      }
+    ]
+  }
+]

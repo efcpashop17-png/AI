@@ -59,6 +59,162 @@ app.post("/api/verify-slip", async (req, res) => {
   }
 });
 
+// ==========================================
+// Permanent Persistent Storage & Backup System
+// Data is stored permanently in /data/orders.json and /data/customers.json
+// Never deleted unless explicitly removed by Admin
+// ==========================================
+const DATA_DIR = path.join(__dirname, "data");
+const ORDERS_FILE = path.join(DATA_DIR, "orders.json");
+const CUSTOMERS_FILE = path.join(DATA_DIR, "customers.json");
+const BACKUPS_DIR = path.join(DATA_DIR, "backups");
+
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+if (!fs.existsSync(BACKUPS_DIR)) fs.mkdirSync(BACKUPS_DIR, { recursive: true });
+
+function readJsonFile(filePath, defaultData = []) {
+  try {
+    if (!fs.existsSync(filePath)) return defaultData;
+    const content = fs.readFileSync(filePath, "utf-8");
+    return JSON.parse(content);
+  } catch (err) {
+    console.error(`Error reading ${filePath}:`, err);
+    return defaultData;
+  }
+}
+
+function writeJsonFile(filePath, data) {
+  try {
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
+    return true;
+  } catch (err) {
+    console.error(`Error writing ${filePath}:`, err);
+    return false;
+  }
+}
+
+function createBackupSnapshot(prefix, data) {
+  try {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const backupPath = path.join(BACKUPS_DIR, `${prefix}_${timestamp}.json`);
+    fs.writeFileSync(backupPath, JSON.stringify(data, null, 2), "utf-8");
+    
+    const files = fs.readdirSync(BACKUPS_DIR).filter(f => f.startsWith(prefix));
+    if (files.length > 100) {
+      files.sort().slice(0, files.length - 100).forEach(f => {
+        try { fs.unlinkSync(path.join(BACKUPS_DIR, f)); } catch (_) {}
+      });
+    }
+  } catch (e) {
+    console.error("Backup snapshot error:", e);
+  }
+}
+
+// 1. Get all persistent orders and customer accounts
+app.get("/api/data/all", (req, res) => {
+  const orders = readJsonFile(ORDERS_FILE, []);
+  const customers = readJsonFile(CUSTOMERS_FILE, []);
+  res.json({
+    success: true,
+    orders,
+    customers,
+    timestamp: Date.now(),
+  });
+});
+
+// 2. Persist single or multiple orders (Upsert)
+app.post("/api/data/orders", (req, res) => {
+  try {
+    const incoming = req.body;
+    let currentOrders = readJsonFile(ORDERS_FILE, []);
+    const items = Array.isArray(incoming) ? incoming : (incoming.order ? [incoming.order] : [incoming]);
+
+    for (const item of items) {
+      if (!item || !item.id) continue;
+      const index = currentOrders.findIndex(o => o.id === item.id);
+      if (index >= 0) {
+        currentOrders[index] = { ...currentOrders[index], ...item };
+      } else {
+        currentOrders.unshift(item);
+      }
+    }
+    writeJsonFile(ORDERS_FILE, currentOrders);
+    createBackupSnapshot("orders_snapshot", currentOrders);
+    res.json({ success: true, count: currentOrders.length });
+  } catch (err) {
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+// 3. Admin Delete order (Only manual deletion permitted)
+app.delete("/api/data/orders/:id", (req, res) => {
+  try {
+    const { id } = req.params;
+    let currentOrders = readJsonFile(ORDERS_FILE, []);
+    createBackupSnapshot("orders_before_admin_delete", currentOrders);
+    currentOrders = currentOrders.filter(o => o.id !== id);
+    writeJsonFile(ORDERS_FILE, currentOrders);
+    res.json({ success: true, count: currentOrders.length });
+  } catch (err) {
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+// 4. Persist single or multiple customer users (Upsert)
+app.post("/api/data/customers", (req, res) => {
+  try {
+    const incoming = req.body;
+    let currentCustomers = readJsonFile(CUSTOMERS_FILE, []);
+    const items = Array.isArray(incoming) ? incoming : (incoming.customer ? [incoming.customer] : [incoming]);
+
+    for (const item of items) {
+      if (!item || !item.id) continue;
+      const index = currentCustomers.findIndex(c => c.id === item.id || (c.username && c.username.toLowerCase() === item.username.toLowerCase()));
+      if (index >= 0) {
+        currentCustomers[index] = { ...currentCustomers[index], ...item };
+      } else {
+        currentCustomers.push(item);
+      }
+    }
+    writeJsonFile(CUSTOMERS_FILE, currentCustomers);
+    createBackupSnapshot("customers_snapshot", currentCustomers);
+    res.json({ success: true, count: currentCustomers.length });
+  } catch (err) {
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+// 5. Admin Delete customer user (Only manual deletion permitted)
+app.delete("/api/data/customers/:id", (req, res) => {
+  try {
+    const { id } = req.params;
+    let currentCustomers = readJsonFile(CUSTOMERS_FILE, []);
+    createBackupSnapshot("customers_before_admin_delete", currentCustomers);
+    currentCustomers = currentCustomers.filter(c => c.id !== id);
+    writeJsonFile(CUSTOMERS_FILE, currentCustomers);
+    res.json({ success: true, count: currentCustomers.length });
+  } catch (err) {
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+// 6. Direct JSON database backup download endpoint
+app.get("/api/data/backup/download", (req, res) => {
+  const orders = readJsonFile(ORDERS_FILE, []);
+  const customers = readJsonFile(CUSTOMERS_FILE, []);
+  const payload = {
+    appName: "EF CPA Shop",
+    exportTime: new Date().toISOString(),
+    totalOrders: orders.length,
+    totalCustomers: customers.length,
+    orders,
+    customers,
+  };
+  res.setHeader("Content-Disposition", `attachment; filename=efcpa_permanent_backup_${Date.now()}.json`);
+  res.setHeader("Content-Type", "application/json");
+  res.send(JSON.stringify(payload, null, 2));
+});
+
 // Download Endpoint for backup
 app.get("/download-project.tar.gz", (req, res) => {
   const filePath = path.join(__dirname, "public", "deploy.tar.gz");

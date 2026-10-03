@@ -152,55 +152,6 @@ export const AdminLoginModal: React.FC = () => {
             <KeyRound className="w-4 h-4 text-white stroke-[2.5]" />
             <span>{isSubmitting ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}</span>
           </button>
-
-          {/* Quick Demo Switcher for testing user separation */}
-          <div className="pt-3 border-t border-violet-500/20 text-center">
-            <span className="text-[10px] text-violet-400 block mb-1.5 font-medium">
-              บัญชีทดสอบเพื่อดูการแยกข้อมูลของยูสใครยูสมัน (คลิกเพื่อกรอกอัตโนมัติ):
-            </span>
-            <div className="flex flex-wrap items-center justify-center gap-1.5 text-[10px]">
-              <button
-                type="button"
-                onClick={() => {
-                  setUsername('client_arm');
-                  setPasscode('User@8899');
-                }}
-                className="px-2 py-1 rounded-lg bg-violet-950/60 hover:bg-violet-900 text-cyan-300 border border-violet-500/30 cursor-pointer font-mono"
-              >
-                👤 client_arm
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setUsername('shop_pro_gamer');
-                  setPasscode('ProShop#2026');
-                }}
-                className="px-2 py-1 rounded-lg bg-violet-950/60 hover:bg-violet-900 text-cyan-300 border border-violet-500/30 cursor-pointer font-mono"
-              >
-                👤 shop_pro_gamer
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setUsername('efootball_king_th');
-                  setPasscode('PesKing@77');
-                }}
-                className="px-2 py-1 rounded-lg bg-violet-950/60 hover:bg-violet-900 text-cyan-300 border border-violet-500/30 cursor-pointer font-mono"
-              >
-                👤 efootball_king_th
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setUsername('arm');
-                  setPasscode('Arm15658');
-                }}
-                className="px-2 py-1 rounded-lg bg-purple-950/80 hover:bg-purple-900 text-fuchsia-300 border border-purple-500/40 cursor-pointer font-mono font-bold"
-              >
-                👑 แอดมิน (arm)
-              </button>
-            </div>
-          </div>
         </form>
       </div>
     </div>

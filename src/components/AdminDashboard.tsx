@@ -88,6 +88,7 @@ export const AdminDashboard: React.FC = () => {
     adminUploadSlip,
     adminUploadDeliveryProof,
     resetAllData,
+    downloadDatabaseBackup,
     setNotification,
     setIsAdminLoginModalOpen,
     setActiveTab,
@@ -1847,6 +1848,32 @@ export const AdminDashboard: React.FC = () => {
                   <FileSpreadsheet className="w-4 h-4" />
                   <span>ดาวน์โหลด Sales Report CSV</span>
                 </button>
+              </div>
+
+              {/* Card 3: Permanent Database Full Backup */}
+              <div className="p-5 rounded-2xl bg-[#1b2238] border-2 border-emerald-500/50 space-y-3 md:col-span-2">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold">
+                    <ShieldCheck className="w-5 h-5 stroke-[2.5]" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-white text-base">สำรองฐานข้อมูลถาวร (Permanent Database Backup)</h4>
+                    <p className="text-[11px] text-emerald-400 font-medium">บันทึกข้อมูลออเดอร์และบัญชีลูกค้าที่แอดมินสร้างไว้ในเซิร์ฟเวอร์แบบถาวร ห้ามลบเองเด็ดขาด</p>
+                  </div>
+                </div>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  ดาวน์โหลดข้อมูลดิบทั้งหมด (คำสั่งซื้อทั้งหมด, บัญชียูสเซอร์ลูกค้า, สลิป, และยอดเงิน) เป็นไฟล์ JSON สำหรับกู้คืนหรือเก็บสำรองข้อมูลในเครื่องแบบถาวร
+                </p>
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={downloadDatabaseBackup}
+                    className="w-full sm:w-auto py-2.5 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs transition-all shadow flex items-center justify-center gap-2 cursor-pointer shadow-emerald-900/40"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>ดาวน์โหลดไฟล์สำรองฐานข้อมูลถาวร (.JSON)</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>

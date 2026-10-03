@@ -55,6 +55,154 @@ app.post("/api/verify-slip", async (req: Request, res: Response) => {
   }
 });
 
+// ==========================================
+// Permanent Persistent Storage & Backup System
+// ==========================================
+const DATA_DIR = path.join(process.cwd(), "data");
+const ORDERS_FILE = path.join(DATA_DIR, "orders.json");
+const CUSTOMERS_FILE = path.join(DATA_DIR, "customers.json");
+const BACKUPS_DIR = path.join(DATA_DIR, "backups");
+
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+if (!fs.existsSync(BACKUPS_DIR)) fs.mkdirSync(BACKUPS_DIR, { recursive: true });
+
+function readJsonFile(filePath: string, defaultData: any[] = []): any[] {
+  try {
+    if (!fs.existsSync(filePath)) return defaultData;
+    const content = fs.readFileSync(filePath, "utf-8");
+    return JSON.parse(content);
+  } catch (err) {
+    console.error(`Error reading ${filePath}:`, err);
+    return defaultData;
+  }
+}
+
+function writeJsonFile(filePath: string, data: any): boolean {
+  try {
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
+    return true;
+  } catch (err) {
+    console.error(`Error writing ${filePath}:`, err);
+    return false;
+  }
+}
+
+function createBackupSnapshot(prefix: string, data: any) {
+  try {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const backupPath = path.join(BACKUPS_DIR, `${prefix}_${timestamp}.json`);
+    fs.writeFileSync(backupPath, JSON.stringify(data, null, 2), "utf-8");
+    
+    const files = fs.readdirSync(BACKUPS_DIR).filter(f => f.startsWith(prefix));
+    if (files.length > 100) {
+      files.sort().slice(0, files.length - 100).forEach(f => {
+        try { fs.unlinkSync(path.join(BACKUPS_DIR, f)); } catch (_) {}
+      });
+    }
+  } catch (e) {
+    console.error("Backup snapshot error:", e);
+  }
+}
+
+app.get("/api/data/all", (_req: Request, res: Response) => {
+  const orders = readJsonFile(ORDERS_FILE, []);
+  const customers = readJsonFile(CUSTOMERS_FILE, []);
+  res.json({
+    success: true,
+    orders,
+    customers,
+    timestamp: Date.now(),
+  });
+});
+
+app.post("/api/data/orders", (req: Request, res: Response) => {
+  try {
+    const incoming = req.body;
+    let currentOrders = readJsonFile(ORDERS_FILE, []);
+    const items = Array.isArray(incoming) ? incoming : (incoming.order ? [incoming.order] : [incoming]);
+
+    for (const item of items) {
+      if (!item || !item.id) continue;
+      const index = currentOrders.findIndex((o: any) => o.id === item.id);
+      if (index >= 0) {
+        currentOrders[index] = { ...currentOrders[index], ...item };
+      } else {
+        currentOrders.unshift(item);
+      }
+    }
+    writeJsonFile(ORDERS_FILE, currentOrders);
+    createBackupSnapshot("orders_snapshot", currentOrders);
+    res.json({ success: true, count: currentOrders.length });
+  } catch (err) {
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+app.delete("/api/data/orders/:id", (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    let currentOrders = readJsonFile(ORDERS_FILE, []);
+    createBackupSnapshot("orders_before_admin_delete", currentOrders);
+    currentOrders = currentOrders.filter((o: any) => o.id !== id);
+    writeJsonFile(ORDERS_FILE, currentOrders);
+    res.json({ success: true, count: currentOrders.length });
+  } catch (err) {
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+app.post("/api/data/customers", (req: Request, res: Response) => {
+  try {
+    const incoming = req.body;
+    let currentCustomers = readJsonFile(CUSTOMERS_FILE, []);
+    const items = Array.isArray(incoming) ? incoming : (incoming.customer ? [incoming.customer] : [incoming]);
+
+    for (const item of items) {
+      if (!item || !item.id) continue;
+      const index = currentCustomers.findIndex((c: any) => c.id === item.id || (c.username && c.username.toLowerCase() === item.username.toLowerCase()));
+      if (index >= 0) {
+        currentCustomers[index] = { ...currentCustomers[index], ...item };
+      } else {
+        currentCustomers.push(item);
+      }
+    }
+    writeJsonFile(CUSTOMERS_FILE, currentCustomers);
+    createBackupSnapshot("customers_snapshot", currentCustomers);
+    res.json({ success: true, count: currentCustomers.length });
+  } catch (err) {
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+app.delete("/api/data/customers/:id", (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    let currentCustomers = readJsonFile(CUSTOMERS_FILE, []);
+    createBackupSnapshot("customers_before_admin_delete", currentCustomers);
+    currentCustomers = currentCustomers.filter((c: any) => c.id !== id);
+    writeJsonFile(CUSTOMERS_FILE, currentCustomers);
+    res.json({ success: true, count: currentCustomers.length });
+  } catch (err) {
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+app.get("/api/data/backup/download", (_req: Request, res: Response) => {
+  const orders = readJsonFile(ORDERS_FILE, []);
+  const customers = readJsonFile(CUSTOMERS_FILE, []);
+  const payload = {
+    appName: "EF CPA Shop",
+    exportTime: new Date().toISOString(),
+    totalOrders: orders.length,
+    totalCustomers: customers.length,
+    orders,
+    customers,
+  };
+  res.setHeader("Content-Disposition", `attachment; filename=efcpa_permanent_backup_${Date.now()}.json`);
+  res.setHeader("Content-Type", "application/json");
+  res.send(JSON.stringify(payload, null, 2));
+});
+
 // Download Endpoint for manual Hostinger deployment
 app.get("/download-project.zip", (_req: Request, res: Response) => {
   const filePath = path.join(process.cwd(), "dist", "deploy.zip");

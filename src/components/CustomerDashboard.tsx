@@ -325,34 +325,12 @@ export const CustomerDashboard: React.FC = () => {
 
             <button
               type="button"
-              onClick={() => adminLogin('arm', 'Arm15658')}
-              className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-cyan-950/80 hover:bg-cyan-900/90 text-cyan-300 font-bold text-xs border border-cyan-500/40 cursor-pointer transition-all shadow-[0_0_15px_rgba(6,182,212,0.25)] flex items-center justify-center gap-1.5"
-            >
-              <ShieldCheck className="w-4 h-4 text-cyan-400" />
-              <span>เข้าสู่ระบบด่วน (แอดมิน Arm)</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => customerLogin('dealer_01', '123456')}
-              className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-violet-950/80 hover:bg-violet-900/90 text-violet-300 font-bold text-xs border border-violet-500/40 cursor-pointer transition-all flex items-center justify-center gap-1.5"
-            >
-              <Sparkles className="w-4 h-4 text-amber-300" />
-              <span>เข้าสู่ระบบด่วน (ลูกค้า Dealer 01)</span>
-            </button>
-
-            <button
-              type="button"
               onClick={() => setActiveTab('store')}
-              className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-[#0B0813] hover:bg-[#1B1433] text-violet-300 hover:text-white font-bold text-xs border border-violet-500/30 cursor-pointer transition-colors"
+              className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-[#0B0813] hover:bg-[#1B1433] text-violet-300 hover:text-white font-bold text-xs border border-violet-500/30 cursor-pointer transition-colors"
             >
               กลับหน้าแรก
             </button>
           </div>
-
-          <p className="text-[11px] text-slate-400 font-mono">
-            💡 บัญชีสำหรับทดสอบ: แอดมิน (arm / Arm15658) หรือ ลูกค้า (dealer_01 / 123456)
-          </p>
         </div>
       </div>
     );

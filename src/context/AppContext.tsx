@@ -23,6 +23,15 @@ import {
 } from '../data/mockData';
 import { pushOrderToGoogleSheets } from '../services/googleSheets';
 import { soundService } from '../services/soundService';
+import {
+  fetchServerData,
+  saveOrderToServer,
+  saveOrdersBatchToServer,
+  deleteOrderFromServer,
+  saveCustomerToServer,
+  saveCustomersBatchToServer,
+  deleteCustomerFromServer,
+} from '../services/persistentStorageService';
 
 interface AppContextType {
   games: Game[];
@@ -170,6 +179,7 @@ interface AppContextType {
   adjustCustomerBalance: (id: string, amount: number, note?: string) => void;
   customerLogin: (username: string, passcode: string) => boolean;
   customerLogout: () => void;
+  downloadDatabaseBackup: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -281,9 +291,57 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return null;
   });
 
+  // Two-way synchronization with permanent server database
+  useEffect(() => {
+    let active = true;
+    fetchServerData().then((serverData) => {
+      if (!active || !serverData) return;
+      if (serverData.orders && serverData.orders.length > 0) {
+        setOrders((prev) => {
+          const map = new Map<string, TopUpOrder>();
+          // Server disk is permanent truth
+          serverData.orders.forEach((o) => map.set(o.id, o));
+          // Preserve any newly placed local orders
+          prev.forEach((o) => {
+            if (!map.has(o.id)) {
+              map.set(o.id, o);
+              saveOrderToServer(o);
+            }
+          });
+          return Array.from(map.values());
+        });
+      } else if (orders.length > 0) {
+        saveOrdersBatchToServer(orders);
+      }
+
+      if (serverData.customers && serverData.customers.length > 0) {
+        setCustomerUsers((prev) => {
+          const map = new Map<string, CustomerUser>();
+          serverData.customers.forEach((c) => map.set(c.id, c));
+          prev.forEach((c) => {
+            if (!map.has(c.id)) {
+              map.set(c.id, c);
+              saveCustomerToServer(c);
+            }
+          });
+          return Array.from(map.values());
+        });
+      } else if (customerUsers.length > 0) {
+        saveCustomersBatchToServer(customerUsers);
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   useEffect(() => {
     try {
       localStorage.setItem(LOCAL_STORAGE_CUSTOMER_USERS, JSON.stringify(customerUsers));
+      if (customerUsers && customerUsers.length > 0) {
+        saveCustomersBatchToServer(customerUsers);
+      }
     } catch (e) {
       console.error('Failed to save customerUsers', e);
     }
@@ -380,6 +438,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   useEffect(() => {
     try {
       localStorage.setItem(LOCAL_STORAGE_ORDERS, JSON.stringify(orders));
+      if (orders && orders.length > 0) {
+        saveOrdersBatchToServer(orders);
+      }
     } catch (e) {
       console.error('Error saving orders', e);
     }
@@ -991,6 +1052,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const deleteCustomerUser = (id: string) => {
+    deleteCustomerFromServer(id);
     setCustomerUsers((prev) => prev.filter((u) => u.id !== id));
     if (currentCustomerUser?.id === id) {
       setCurrentCustomerUser(null);
@@ -1646,6 +1708,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
   };
 
+  const downloadDatabaseBackup = () => {
+    window.location.href = '/api/data/backup/download';
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -1721,6 +1787,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         adjustCustomerBalance,
         customerLogin,
         customerLogout,
+        downloadDatabaseBackup,
         soundEnabled,
         toggleSound,
       }}
