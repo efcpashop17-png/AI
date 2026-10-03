@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import {
   Search,
@@ -21,6 +21,9 @@ import {
   RefreshCw,
   AlertCircle,
   Sparkles,
+  Camera,
+  Lock,
+  User,
 } from 'lucide-react';
 import { TopUpOrder } from '../types';
 import { verifySlipWithEasySlip, EasySlipVerifyResult } from '../services/easySlipService';
@@ -33,17 +36,42 @@ export const OrderTrackingView: React.FC = () => {
     setActiveTab,
     attachSlipAndMarkPaid,
     setNotification,
+    isAdminLoggedIn,
+    currentCustomerUser,
+    setIsAdminLoginModalOpen,
+    adminLogin,
+    customerLogin,
   } = useApp();
+
+  const isLoggedIn = isAdminLoggedIn || !!currentCustomerUser;
+
+  // Filter orders strictly for the current logged-in user
+  const userOrders = useMemo(() => {
+    if (isAdminLoggedIn && !currentCustomerUser) {
+      return orders;
+    }
+    if (!currentCustomerUser) return [];
+    return orders.filter(
+      (ord) =>
+        ord.customerId === currentCustomerUser.id ||
+        (ord.username && ord.username.toLowerCase() === currentCustomerUser.username.toLowerCase()) ||
+        (ord.contactPhone && ord.contactPhone === currentCustomerUser.contactPhone)
+    );
+  }, [orders, currentCustomerUser, isAdminLoggedIn]);
+
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedOrderId, setSelectedOrderId] = useState<string>(orders[0]?.id || '');
+  const [selectedOrderId, setSelectedOrderId] = useState<string>(userOrders[0]?.id || '');
   const [viewingSlipUrl, setViewingSlipUrl] = useState<string | null>(null);
   const [isVerifyingSlip, setIsVerifyingSlip] = useState(false);
   const [easySlipResult, setEasySlipResult] = useState<EasySlipVerifyResult | null>(null);
+  const [viewingProofUrl, setViewingProofUrl] = useState<string | null>(null);
+  const [viewingProofTitle, setViewingProofTitle] = useState<string>('');
+  const [isComparisonModalOpen, setIsComparisonModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const selectedOrder = orders.find((o) => o.id === selectedOrderId) || orders[0] || null;
+  const selectedOrder = userOrders.find((o) => o.id === selectedOrderId) || userOrders[0] || null;
 
-  const filteredOrders = orders.filter((o) => {
+  const filteredOrders = userOrders.filter((o) => {
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase().trim();
     return (
@@ -69,6 +97,69 @@ export const OrderTrackingView: React.FC = () => {
       setActiveTab('store');
     }
   };
+
+  // Enforce login requirement for Order Tracking
+  if (!isLoggedIn) {
+    return (
+      <div className="max-w-xl mx-auto px-4 py-16 animate-fadeIn">
+        <div className="rounded-3xl bg-[#141928] border-2 border-slate-700 p-8 shadow-2xl text-center text-white space-y-5">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-600 via-fuchsia-600 to-cyan-500 mx-auto flex items-center justify-center shadow-lg shadow-violet-600/30 border border-violet-400/40">
+            <Lock className="w-8 h-8 text-white stroke-[2.5]" />
+          </div>
+
+          <span className="text-[11px] font-black uppercase tracking-wider px-3 py-1 rounded-full bg-violet-950 text-cyan-300 border border-violet-500/40 inline-flex items-center gap-1.5">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+            <span>ระบบตรวจสอบสถานะคำสั่งซื้อเฉพาะบุคคล</span>
+          </span>
+
+          <h2 className="text-2xl sm:text-3xl font-black text-white font-heading">
+            เข้าสู่ระบบเพื่อเช็คคำสั่งซื้อ
+          </h2>
+
+          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed font-medium">
+            กรุณาเข้าสู่ระบบก่อนเพื่อตรวจสอบสถานะคำสั่งซื้อและภาพหลักฐานการจัดส่งสินค้า ข้อมูลถูกแยกเป็นของยูสใครยูสมัน 100% เพื่อความปลอดภัยและความเป็นส่วนตัว
+          </p>
+
+          <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => setIsAdminLoginModalOpen(true)}
+              className="w-full sm:w-auto px-6 py-3.5 rounded-2xl neon-btn-purple text-white font-black text-sm shadow-xl flex items-center justify-center gap-2 cursor-pointer transition-all hover:scale-105"
+            >
+              <User className="w-4 h-4" />
+              <span>เข้าสู่ระบบ (Login)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => adminLogin('arm', 'Arm15658')}
+              className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-cyan-950/80 hover:bg-cyan-900/90 text-cyan-300 font-bold text-xs border border-cyan-500/40 cursor-pointer transition-all shadow-[0_0_15px_rgba(6,182,212,0.25)] flex items-center justify-center gap-1.5"
+            >
+              <ShieldCheck className="w-4 h-4 text-cyan-400" />
+              <span>เข้าสู่ระบบด่วน (แอดมิน Arm)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => customerLogin('dealer_01', '123456')}
+              className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-violet-950/80 hover:bg-violet-900/90 text-violet-300 font-bold text-xs border border-violet-500/40 cursor-pointer transition-all flex items-center justify-center gap-1.5"
+            >
+              <Sparkles className="w-4 h-4 text-amber-300" />
+              <span>เข้าสู่ระบบด่วน (ลูกค้า Dealer 01)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('store')}
+              className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-[#0d111d] hover:bg-[#1b2234] text-slate-300 hover:text-white font-bold text-xs border border-slate-700 cursor-pointer transition-colors"
+            >
+              กลับหน้าแรก
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const handleAttachSlipFromTracking = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -502,6 +593,163 @@ export const OrderTrackingView: React.FC = () => {
                 )}
               </div>
 
+              {/* DELIVERY PROOF CARD (2 SEPARATE SLOTS: PRE-DELIVERY & POST-DELIVERY) */}
+              {(selectedOrder.status === 'completed' || selectedOrder.preDeliveryImageUrl || selectedOrder.postDeliveryImageUrl) && (
+                <div className="p-4 sm:p-5 rounded-2xl bg-[#0d111d] border-2 border-emerald-500/40 shadow-[0_0_20px_rgba(16,185,129,0.12)] space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold shadow-[0_0_12px_rgba(16,185,129,0.3)]">
+                        <Camera className="w-5 h-5 stroke-[2.5]" />
+                      </div>
+                      <div>
+                        <span className="font-extrabold text-sm sm:text-base text-white block font-heading">
+                          📸 หลักฐานการจัดส่งสินค้า (Proof of Delivery)
+                        </span>
+                        <span className="text-[11px] text-slate-300">
+                          ตรวจสอบรูปภาพจำนวนของก่อนส่งและหลังส่งโดยแอดมิน เพื่อความโปร่งใส 100%
+                        </span>
+                      </div>
+                    </div>
+
+                    {(selectedOrder.preDeliveryImageUrl || selectedOrder.postDeliveryImageUrl) && (
+                      <button
+                        type="button"
+                        onClick={() => setIsComparisonModalOpen(true)}
+                        className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-extrabold text-xs flex items-center gap-2 cursor-pointer shadow-lg shadow-emerald-600/20 transition-all hover:scale-105 active:scale-95 self-start sm:self-auto"
+                      >
+                        <Eye className="w-4 h-4" />
+                        <span>กดดูแบบ 2 ช่องเปรียบเทียบเต็มจอ</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* 2 Distinct Boxes */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Box 1: Pre-delivery (ภาพก่อนส่ง) */}
+                    <div className="p-3.5 rounded-xl bg-[#141928] border border-slate-700/80 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-amber-400 flex items-center gap-1.5">
+                          <Camera className="w-3.5 h-3.5 text-amber-400" />
+                          <span>ช่องที่ 1: จำนวนของก่อนส่ง</span>
+                        </span>
+                        {selectedOrder.preDeliveryImageUrl ? (
+                          <span className="text-[10px] font-bold text-emerald-300 bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-500/40">
+                            แนบภาพแล้ว
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full">
+                            รอแอดมินแนบ
+                          </span>
+                        )}
+                      </div>
+
+                      {selectedOrder.preDeliveryImageUrl ? (
+                        <div className="space-y-2">
+                          <div
+                            onClick={() => {
+                              setViewingProofUrl(selectedOrder.preDeliveryImageUrl || null);
+                              setViewingProofTitle(`รูปที่ 1: จำนวนของก่อนส่ง (Pre-delivery) - ออเดอร์ ${selectedOrder.id}`);
+                            }}
+                            className="relative w-full h-44 rounded-xl overflow-hidden bg-black border border-amber-400/40 hover:border-amber-400 cursor-pointer group shadow-md flex items-center justify-center transition-all"
+                            title="คลิกเพื่อดูรูปขยาย"
+                          >
+                            <img
+                              src={selectedOrder.preDeliveryImageUrl}
+                              alt="ภาพก่อนส่ง"
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                            />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-1.5 transition-opacity">
+                              <Eye className="w-5 h-5 text-white" />
+                              <span className="text-xs font-bold text-white">คลิกเพื่อดูภาพเต็ม</span>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setViewingProofUrl(selectedOrder.preDeliveryImageUrl || null);
+                              setViewingProofTitle(`รูปที่ 1: จำนวนของก่อนส่ง (Pre-delivery) - ออเดอร์ ${selectedOrder.id}`);
+                            }}
+                            className="w-full py-1.5 rounded-lg bg-[#1e273d] hover:bg-[#283552] text-amber-400 text-xs font-bold border border-slate-700 flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>ดูภาพขยายก่อนส่ง</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="w-full h-44 rounded-xl bg-[#0b0e17] border border-dashed border-slate-700 flex flex-col items-center justify-center p-4 text-center">
+                          <Camera className="w-8 h-8 text-slate-600 mb-1.5" />
+                          <span className="text-xs font-bold text-slate-400">ยังไม่มีภาพก่อนส่ง</span>
+                          <span className="text-[10px] text-slate-500 mt-0.5">
+                            แอดมินจะแคปภาพยอดเดิมในไอดีก่อนเริ่มส่งเหรียญ
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Box 2: Post-delivery (ภาพหลังส่ง) */}
+                    <div className="p-3.5 rounded-xl bg-[#141928] border border-slate-700/80 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-cyan-400 flex items-center gap-1.5">
+                          <Camera className="w-3.5 h-3.5 text-cyan-400" />
+                          <span>ช่องที่ 2: จำนวนของหลังส่ง</span>
+                        </span>
+                        {selectedOrder.postDeliveryImageUrl ? (
+                          <span className="text-[10px] font-bold text-emerald-300 bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-500/40">
+                            แนบภาพแล้ว
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full">
+                            รอแอดมินแนบ
+                          </span>
+                        )}
+                      </div>
+
+                      {selectedOrder.postDeliveryImageUrl ? (
+                        <div className="space-y-2">
+                          <div
+                            onClick={() => {
+                              setViewingProofUrl(selectedOrder.postDeliveryImageUrl || null);
+                              setViewingProofTitle(`รูปที่ 2: จำนวนของหลังส่ง (Post-delivery) - ออเดอร์ ${selectedOrder.id}`);
+                            }}
+                            className="relative w-full h-44 rounded-xl overflow-hidden bg-black border border-cyan-400/40 hover:border-cyan-400 cursor-pointer group shadow-md flex items-center justify-center transition-all"
+                            title="คลิกเพื่อดูรูปขยาย"
+                          >
+                            <img
+                              src={selectedOrder.postDeliveryImageUrl}
+                              alt="ภาพหลังส่ง"
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                            />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-1.5 transition-opacity">
+                              <Eye className="w-5 h-5 text-white" />
+                              <span className="text-xs font-bold text-white">คลิกเพื่อดูภาพเต็ม</span>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setViewingProofUrl(selectedOrder.postDeliveryImageUrl || null);
+                              setViewingProofTitle(`รูปที่ 2: จำนวนของหลังส่ง (Post-delivery) - ออเดอร์ ${selectedOrder.id}`);
+                            }}
+                            className="w-full py-1.5 rounded-lg bg-[#1e273d] hover:bg-[#283552] text-cyan-400 text-xs font-bold border border-slate-700 flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>ดูภาพขยายหลังส่ง</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="w-full h-44 rounded-xl bg-[#0b0e17] border border-dashed border-slate-700 flex flex-col items-center justify-center p-4 text-center">
+                          <Camera className="w-8 h-8 text-slate-600 mb-1.5" />
+                          <span className="text-xs font-bold text-slate-400">ยังไม่มีภาพหลังส่ง</span>
+                          <span className="text-[10px] text-slate-500 mt-0.5">
+                            เมื่อแอดมินส่งของสำเร็จจะแคปภาพยอดเหรียญใหม่ให้ตรวจ
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Live Timeline - บันทึกความคืบหน้าระบบอัตโนมัติ */}
               <div className="space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
@@ -575,13 +823,21 @@ export const OrderTrackingView: React.FC = () => {
                   className="px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs shadow-xl shadow-amber-400/25 flex items-center gap-2 transition-all cursor-pointer"
                 >
                   <Zap className="w-4 h-4 text-slate-950 stroke-[2.5]" />
-                  <span>เติมเกมนี้อีกครั้ง</span>
+                  <span>ซื้อแพ็กเกจนี้อีกครั้ง</span>
                 </button>
               </div>
             </div>
           ) : (
-            <div className="p-12 rounded-3xl bg-[#141928] border-2 border-slate-700 text-center text-slate-400 text-sm font-medium">
-              กรุณาเลือกคำสั่งซื้อจากรายการด้านซ้ายเพื่อดูรายละเอียด
+            <div className="p-12 rounded-3xl bg-[#141928] border-2 border-slate-700 text-center text-slate-400 text-sm font-medium space-y-3">
+              <Package className="w-12 h-12 text-slate-600 mx-auto" />
+              <p>ไม่พบรายการคำสั่งซื้อของบัญชีนี้</p>
+              <button
+                type="button"
+                onClick={() => setActiveTab('store')}
+                className="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs cursor-pointer"
+              >
+                เลือกซื้อสินค้า
+              </button>
             </div>
           )}
         </div>
@@ -617,6 +873,156 @@ export const OrderTrackingView: React.FC = () => {
                 type="button"
                 onClick={() => setViewingSlipUrl(null)}
                 className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs cursor-pointer"
+              >
+                ปิดหน้าต่าง
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SINGLE DELIVERY PROOF LIGHTBOX */}
+      {viewingProofUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fadeIn">
+          <div className="relative max-w-3xl w-full bg-[#141928] border-2 border-slate-700 rounded-3xl p-5 shadow-2xl">
+            <button
+              type="button"
+              onClick={() => setViewingProofUrl(null)}
+              className="absolute top-4 right-4 p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-2 mb-4">
+              <Camera className="w-5 h-5 text-cyan-400" />
+              <h4 className="text-base font-black text-white">{viewingProofTitle}</h4>
+            </div>
+
+            <div className="rounded-2xl overflow-hidden bg-black flex items-center justify-center border border-slate-700 max-h-[75vh]">
+              <img
+                src={viewingProofUrl}
+                alt="ภาพหลักฐานการจัดส่ง"
+                className="max-h-[75vh] w-auto object-contain"
+              />
+            </div>
+
+            <div className="mt-4 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setViewingProofUrl(null)}
+                className="px-5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs cursor-pointer"
+              >
+                ปิดหน้าต่าง
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2-COLUMN SIDE-BY-SIDE PROOF COMPARISON MODAL */}
+      {isComparisonModalOpen && selectedOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fadeIn overflow-y-auto">
+          <div className="relative max-w-5xl w-full bg-[#121624] border-2 border-slate-700 rounded-3xl p-6 sm:p-7 shadow-2xl my-8 text-white">
+            <button
+              type="button"
+              onClick={() => setIsComparisonModalOpen(false)}
+              className="absolute top-5 right-5 p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+            >
+              <X className="w-6 h-6" />
+            </button>
+
+            {/* Modal Header */}
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white shadow-lg shadow-emerald-500/25">
+                <Camera className="w-6 h-6 stroke-[2.5]" />
+              </div>
+              <div>
+                <span className="text-[11px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-500/40 inline-block mb-1">
+                  SIDE-BY-SIDE PROOF OF DELIVERY
+                </span>
+                <h3 className="text-xl sm:text-2xl font-black text-white font-display">
+                  เปรียบเทียบภาพหลักฐาน: ก่อนส่ง vs หลังส่ง
+                </h3>
+                <p className="text-xs text-slate-300 mt-0.5 font-medium">
+                  คำสั่งซื้อ: <span className="font-mono text-amber-400 font-bold">{selectedOrder.id}</span> | {selectedOrder.gameName} ({selectedOrder.packageName}) | UID: <span className="font-mono text-emerald-400 font-bold">{selectedOrder.playerUid}</span>
+                </p>
+              </div>
+            </div>
+
+            {/* Side-by-Side Images */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+              {/* Left Column: Pre-delivery */}
+              <div className="p-4 rounded-2xl bg-[#0b0e17] border-2 border-amber-500/40 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-black text-amber-400 flex items-center gap-1.5 font-heading">
+                    <Camera className="w-4 h-4" />
+                    <span>ช่องที่ 1: ภาพจำนวนของก่อนส่ง (Pre-delivery)</span>
+                  </span>
+                  <span className="text-[11px] font-bold text-amber-300 bg-amber-950/80 px-2 py-0.5 rounded-full border border-amber-500/40">
+                    ก่อนเติม
+                  </span>
+                </div>
+
+                {selectedOrder.preDeliveryImageUrl ? (
+                  <div className="w-full h-72 sm:h-80 rounded-xl overflow-hidden bg-black border border-slate-700 flex items-center justify-center">
+                    <img
+                      src={selectedOrder.preDeliveryImageUrl}
+                      alt="ก่อนส่ง"
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
+                ) : (
+                  <div className="w-full h-72 sm:h-80 rounded-xl bg-[#121624] border border-dashed border-slate-700 flex flex-col items-center justify-center p-6 text-center">
+                    <Camera className="w-10 h-10 text-slate-600 mb-2" />
+                    <span className="text-xs font-bold text-slate-400">ยังไม่มีภาพก่อนส่ง</span>
+                  </div>
+                )}
+                <p className="text-[11px] text-slate-400 text-center">
+                  ภาพบันทึกยอดเหรียญ/เพชรเดิมในไอดีก่อนเริ่มเติม
+                </p>
+              </div>
+
+              {/* Right Column: Post-delivery */}
+              <div className="p-4 rounded-2xl bg-[#0b0e17] border-2 border-emerald-500/40 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-black text-emerald-400 flex items-center gap-1.5 font-heading">
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>ช่องที่ 2: ภาพจำนวนของหลังส่ง (Post-delivery)</span>
+                  </span>
+                  <span className="text-[11px] font-bold text-emerald-300 bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-500/40">
+                    ส่งมอบสำเร็จ
+                  </span>
+                </div>
+
+                {selectedOrder.postDeliveryImageUrl ? (
+                  <div className="w-full h-72 sm:h-80 rounded-xl overflow-hidden bg-black border border-slate-700 flex items-center justify-center">
+                    <img
+                      src={selectedOrder.postDeliveryImageUrl}
+                      alt="หลังส่ง"
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
+                ) : (
+                  <div className="w-full h-72 sm:h-80 rounded-xl bg-[#121624] border border-dashed border-slate-700 flex flex-col items-center justify-center p-6 text-center">
+                    <Camera className="w-10 h-10 text-slate-600 mb-2" />
+                    <span className="text-xs font-bold text-slate-400">ยังไม่มีภาพหลังส่ง</span>
+                  </div>
+                )}
+                <p className="text-[11px] text-slate-400 text-center">
+                  ภาพยืนยันยอดเหรียญ/แพ็กเกจใหม่ที่เข้าไอดีผู้เล่นเรียบร้อย
+                </p>
+              </div>
+            </div>
+
+            {/* Footer Summary */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-slate-700 text-xs">
+              <span className="text-slate-300">
+                หากพบปัญหาหรือยอดเหรียญไม่ตรง สามารถแคปหน้านี้และส่งให้แอดมินช่วยตรวจสอบได้ตลอดเวลา
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsComparisonModalOpen(false)}
+                className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs cursor-pointer shadow-lg"
               >
                 ปิดหน้าต่าง
               </button>

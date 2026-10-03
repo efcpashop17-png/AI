@@ -46,6 +46,7 @@ const MainContent: React.FC = () => {
     setNotification,
     isTopupModalOpen,
     setIsTopupModalOpen,
+    isAdminLoggedIn,
   } = useApp();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -131,7 +132,7 @@ const MainContent: React.FC = () => {
                         </span>
                       </h2>
                       <p className="text-xs text-violet-300/70 font-medium">
-                        คลิกเลือกเกมที่คุณเล่นเพื่อดูแพ็กเกจราคาพิเศษและเริ่มทำรายการเติมเงิน
+                        คลิกเลือกเกมที่คุณเล่นเพื่อดูแพ็กเกจราคาพิเศษและเริ่มทำรายการสั่งซื้อ
                       </p>
                     </div>
                   </div>
@@ -221,7 +222,7 @@ const MainContent: React.FC = () => {
             {activeTab === 'dashboard' && <CustomerDashboard />}
             {activeTab === 'tracking' && <OrderTrackingView />}
             {activeTab === 'how_to' && <HowToTopUp />}
-            {activeTab === 'admin' && <AdminDashboard />}
+            {activeTab === 'admin' && (isAdminLoggedIn ? <AdminDashboard /> : <OrderTrackingView />)}
           </>
         )}
       </main>
@@ -271,7 +272,7 @@ const MainContent: React.FC = () => {
                     onClick={() => setActiveTab('how_to')}
                     className="hover:text-cyan-300 transition-colors"
                   >
-                    วิธีเติมเงิน & คำถามพบบ่อย
+                    วิธีสั่งซื้อ & คำถามพบบ่อย
                   </button>
                 </li>
                 <li>
@@ -282,14 +283,17 @@ const MainContent: React.FC = () => {
                     เช็คสถานะคำสั่งซื้อ
                   </button>
                 </li>
-                <li>
-                  <button
-                    onClick={() => setActiveTab('admin')}
-                    className="text-violet-400 hover:text-cyan-300 font-bold"
-                  >
-                    ระบบหลังบ้านแอดมิน
-                  </button>
-                </li>
+                {isAdminLoggedIn && (
+                  <li>
+                    <button
+                      onClick={() => setActiveTab('admin')}
+                      className="text-cyan-400 hover:text-cyan-300 font-bold flex items-center gap-1.5"
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>ระบบหลังบ้านแอดมิน</span>
+                    </button>
+                  </li>
+                )}
               </ul>
             </div>
 

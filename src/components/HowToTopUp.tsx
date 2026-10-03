@@ -11,20 +11,75 @@ import {
   MessageCircle,
   FileQuestion,
   Copy,
+  Lock,
+  User,
+  Sparkles,
 } from 'lucide-react';
 
 export const HowToTopUp: React.FC = () => {
-  const { setNotification } = useApp();
+  const {
+    setNotification,
+    currentCustomerUser,
+    isAdminLoggedIn,
+    setIsAdminLoginModalOpen,
+    setActiveTab,
+  } = useApp();
+
+  const isLoggedIn = isAdminLoggedIn || !!currentCustomerUser;
+
+  // Enforce login requirement for How to Buy guide
+  if (!isLoggedIn) {
+    return (
+      <div className="max-w-xl mx-auto px-4 py-16 animate-fadeIn">
+        <div className="rounded-3xl bg-[#141928] border-2 border-slate-700 p-8 shadow-2xl text-center text-white space-y-5">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-600 via-fuchsia-600 to-cyan-500 mx-auto flex items-center justify-center shadow-lg shadow-violet-600/30 border border-violet-400/40">
+            <Lock className="w-8 h-8 text-white stroke-[2.5]" />
+          </div>
+
+          <span className="text-[11px] font-black uppercase tracking-wider px-3 py-1 rounded-full bg-violet-950 text-cyan-300 border border-violet-500/40 inline-flex items-center gap-1.5">
+            <Sparkles className="w-3 h-3 text-cyan-400" />
+            <span>คู่มือสำหรับสมาชิก</span>
+          </span>
+
+          <h2 className="text-2xl sm:text-3xl font-black text-white font-heading">
+            เข้าสู่ระบบเพื่อดูวิธีการซื้อสต็อก
+          </h2>
+
+          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed font-medium">
+            กรุณาเข้าสู่ระบบก่อนเพื่อดูคู่มือและวิธีการซื้อสต็อกราคาส่ง ระบบจำกัดการเข้าถึงเฉพาะสมาชิกที่เข้าสู่ระบบแล้วเท่านั้น
+          </p>
+
+          <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => setIsAdminLoginModalOpen(true)}
+              className="w-full sm:w-auto px-6 py-3.5 rounded-2xl neon-btn-purple text-white font-black text-sm shadow-xl flex items-center justify-center gap-2 cursor-pointer transition-all hover:scale-105"
+            >
+              <User className="w-4 h-4" />
+              <span>เข้าสู่ระบบ (Login)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('store')}
+              className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-[#0d111d] hover:bg-[#1b2234] text-slate-300 hover:text-white font-bold text-xs border border-slate-700 cursor-pointer transition-colors"
+            >
+              กลับหน้าแรก
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8 animate-fadeIn space-y-10">
       {/* Title */}
       <div className="text-center max-w-2xl mx-auto space-y-2">
-        <h1 className="text-2xl sm:text-4xl font-black text-white font-display">
-          วิธีเติมเกมและคำถามที่พบบ่อย
+        <h1 className="text-2xl sm:text-4xl font-black text-white font-heading">
+          วิธีสั่งซื้อสต็อกเกมและคำถามที่พบบ่อย
         </h1>
         <p className="text-xs sm:text-sm text-slate-400 font-medium">
-          ขั้นตอนง่ายๆ 3 สเต็ป เติมไว ไม่ต้องให้รหัสผ่าน พร้อมการดูแลตลอด 24 ชั่วโมง
+          ขั้นตอนง่ายๆ 3 สเต็ป สั่งซื้อง่าย ไม่ต้องให้รหัสผ่าน พร้อมการดูแลตลอด 24 ชั่วโมง
         </p>
       </div>
 

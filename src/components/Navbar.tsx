@@ -20,6 +20,8 @@ import {
   BarChart3,
   Wallet,
   Plus,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 import { ActiveTab } from '../types';
 import { EFCPALogo } from './EFCPALogo';
@@ -38,11 +40,34 @@ export const Navbar: React.FC = () => {
     cart,
     setIsCartOpen,
     setIsTopupModalOpen,
+    setNotification,
+    soundEnabled,
+    toggleSound,
   } = useApp();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  const isLoggedIn = isAdminLoggedIn || !!currentCustomerUser;
+
+  const userOrders = orders.filter((ord) => {
+    if (isAdminLoggedIn && !currentCustomerUser) return true;
+    if (!currentCustomerUser) return false;
+    return (
+      ord.customerId === currentCustomerUser.id ||
+      (ord.username && ord.username.toLowerCase() === currentCustomerUser.username.toLowerCase()) ||
+      (ord.contactPhone && ord.contactPhone === currentCustomerUser.contactPhone)
+    );
+  });
+
   const handleNavClick = (tab: ActiveTab) => {
+    if (tab === 'admin' && !isAdminLoggedIn) {
+      setNotification({
+        type: 'error',
+        message: 'กรุณาเข้าสู่ระบบในฐานะแอดมินเพื่อเข้าใช้งานส่วนนี้',
+      });
+      setIsAdminLoginModalOpen(true);
+      return;
+    }
     setActiveTab(tab);
     if (tab === 'store') {
       setSelectedGame(null);
@@ -85,6 +110,7 @@ export const Navbar: React.FC = () => {
               หน้าแรก
             </button>
 
+            {/* Dashboard Link - Always visible */}
             <button
               onClick={() => handleNavClick('dashboard')}
               className={`px-3.5 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 cursor-pointer ${
@@ -94,7 +120,7 @@ export const Navbar: React.FC = () => {
               }`}
             >
               <BarChart3 className="w-4 h-4 text-cyan-400 stroke-[2.5]" />
-              <span>แดชบอร์ดลูกค้า</span>
+              <span>แดชบอร์ด</span>
             </button>
 
             <button
@@ -107,9 +133,9 @@ export const Navbar: React.FC = () => {
             >
               <History className="w-4 h-4 text-cyan-400 stroke-[2.5]" />
               <span>เช็คคำสั่งซื้อ</span>
-              {orders.length > 0 && (
+              {isLoggedIn && userOrders.length > 0 && (
                 <span className="text-xs px-2 py-0.5 rounded-full bg-violet-900/60 text-cyan-300 border border-violet-600/40 font-bold tabular-nums">
-                  {orders.length}
+                  {userOrders.length}
                 </span>
               )}
             </button>
@@ -122,8 +148,23 @@ export const Navbar: React.FC = () => {
                   : 'text-slate-300 hover:text-white hover:bg-violet-950/40'
               }`}
             >
-              วิธีเติมเงิน
+              วิธีสั่งซื้อ
             </button>
+
+            {/* ONLY show Admin tab if admin is logged in */}
+            {isAdminLoggedIn && (
+              <button
+                onClick={() => handleNavClick('admin')}
+                className={`px-3.5 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                  activeTab === 'admin'
+                    ? 'bg-violet-600 text-white border border-cyan-400 shadow-[0_0_15px_rgba(139,92,246,0.6)]'
+                    : 'bg-violet-950/60 text-cyan-300 hover:bg-violet-900 border border-violet-600/40'
+                }`}
+              >
+                <ShieldCheck className="w-4 h-4 text-cyan-300 stroke-[2.5]" />
+                <span>หลังบ้านแอดมิน</span>
+              </button>
+            )}
           </nav>
 
           {/* Action Zone: Cart & Login */}
@@ -144,9 +185,27 @@ export const Navbar: React.FC = () => {
               )}
             </button>
 
+            {/* SOUND EFFECTS TOGGLE BUTTON */}
+            <button
+              type="button"
+              onClick={toggleSound}
+              title={soundEnabled ? 'ปิดเสียงเอฟเฟกต์ (Mute)' : 'เปิดเสียงเอฟเฟกต์ (Unmute)'}
+              className={`p-2 rounded-xl border transition-all cursor-pointer flex items-center justify-center ${
+                soundEnabled
+                  ? 'bg-[#120E24] hover:bg-[#1B1433] border-violet-500/40 text-cyan-300 shadow-[0_0_12px_rgba(6,182,212,0.25)]'
+                  : 'bg-[#120E24]/60 hover:bg-[#1B1433] border-slate-700 text-slate-500'
+              }`}
+            >
+              {soundEnabled ? (
+                <Volume2 className="w-4 h-4 stroke-[2.2]" />
+              ) : (
+                <VolumeX className="w-4 h-4" />
+              )}
+            </button>
+
             {/* Login / Admin / Customer Action Button */}
             {isAdminLoggedIn ? (
-              <div className="flex items-center gap-2 p-1 rounded-xl bg-[#120E24] border border-violet-500/40">
+              <div className="flex items-center gap-2 p-1.5 rounded-xl bg-[#120E24] border border-violet-500/50">
                 <button
                   onClick={() => handleNavClick('admin')}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
@@ -156,54 +215,45 @@ export const Navbar: React.FC = () => {
                   }`}
                 >
                   <ShieldCheck className="w-3.5 h-3.5 stroke-[2.5]" />
-                  <span>หลังบ้านแอดมิน</span>
+                  <span>แอดมิน: Arm</span>
                 </button>
 
                 <button
                   onClick={adminLogout}
                   title="ออกจากระบบแอดมิน"
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-950/40 transition-colors cursor-pointer"
+                  className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-rose-300 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/40 transition-colors cursor-pointer flex items-center gap-1"
                 >
-                  <LogOut className="w-4 h-4" />
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>ออกจากระบบ</span>
                 </button>
               </div>
             ) : currentCustomerUser ? (
-              <div className="flex items-center gap-2 p-1.5 rounded-xl bg-[#120E24] border border-amber-400/40 text-xs">
+              <div className="flex items-center gap-2 p-1.5 rounded-xl bg-[#120E24] border border-violet-500/40 text-xs">
                 <div
                   onClick={() => handleNavClick('dashboard')}
                   className="flex items-center gap-1.5 px-2 cursor-pointer hover:opacity-85 transition-opacity"
                   title="ไปที่แดชบอร์ดลูกค้า"
                 >
-                  <div className="w-6 h-6 rounded-full bg-amber-400 text-slate-950 flex items-center justify-center font-black text-[10px]">
+                  <div className="w-6 h-6 rounded-full bg-cyan-400 text-slate-950 flex items-center justify-center font-black text-[10px]">
                     👤
                   </div>
                   <div className="text-left">
                     <span className="font-bold text-white block leading-tight">
                       {currentCustomerUser.customerName || currentCustomerUser.username}
                     </span>
-                    <span className="text-[10px] text-emerald-400 font-mono font-bold block">
-                      ฿{currentCustomerUser.balance.toLocaleString()}
+                    <span className="text-[10px] text-cyan-300 font-mono font-medium block">
+                      ผู้ใช้งาน
                     </span>
                   </div>
                 </div>
 
-                {/* Direct Top-up button with EasySlip */}
-                <button
-                  type="button"
-                  onClick={() => setIsTopupModalOpen(true)}
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-[11px] transition-all shadow-[0_0_12px_rgba(16,185,129,0.4)] cursor-pointer hover:scale-105 active:scale-95"
-                  title="เติมเครดิตอัตโนมัติด้วย EasySlip"
-                >
-                  <Plus className="w-3.5 h-3.5 stroke-[3]" />
-                  <span>เติมเครดิต</span>
-                </button>
-
                 <button
                   onClick={customerLogout}
-                  title="ออกจากระบบลูกค้า"
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-950/40 transition-colors cursor-pointer"
+                  title="ออกจากระบบ"
+                  className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-rose-300 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/40 transition-colors cursor-pointer flex items-center gap-1"
                 >
                   <LogOut className="w-3.5 h-3.5" />
+                  <span>ออกจากระบบ</span>
                 </button>
               </div>
             ) : (
@@ -212,7 +262,7 @@ export const Navbar: React.FC = () => {
                 className="neon-btn-purple flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold cursor-pointer"
               >
                 <User className="w-4 h-4" />
-                <span>เข้าสู่ระบบ / สมาชิก</span>
+                <span>เข้าสู่ระบบ</span>
               </button>
             )}
           </div>
@@ -256,6 +306,18 @@ export const Navbar: React.FC = () => {
           </button>
 
           <button
+            onClick={() => handleNavClick('dashboard')}
+            className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 ${
+              activeTab === 'dashboard'
+                ? 'bg-violet-600/30 text-white border border-violet-400'
+                : 'text-slate-300 hover:bg-violet-950/40'
+            }`}
+          >
+            <BarChart3 className="w-4 h-4 text-cyan-400" />
+            <span>📊 แดชบอร์ด & ส่งออก CSV</span>
+          </button>
+
+          <button
             onClick={() => handleNavClick('how_to')}
             className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-bold ${
               activeTab === 'how_to'
@@ -263,7 +325,7 @@ export const Navbar: React.FC = () => {
                 : 'text-slate-300 hover:bg-violet-950/40'
             }`}
           >
-            📖 วิธีเติมเงิน
+            📖 วิธีสั่งซื้อ
           </button>
 
           <button
@@ -278,9 +340,9 @@ export const Navbar: React.FC = () => {
               <History className="w-4 h-4 text-cyan-400" />
               <span>เช็คคำสั่งซื้อ</span>
             </span>
-            {orders.length > 0 && (
+            {isLoggedIn && userOrders.length > 0 && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-violet-900/60 text-cyan-300">
-                {orders.length}
+                {userOrders.length}
               </span>
             )}
           </button>
@@ -303,14 +365,39 @@ export const Navbar: React.FC = () => {
             )}
           </button>
 
+          <button
+            type="button"
+            onClick={toggleSound}
+            className="w-full text-left px-4 py-2.5 rounded-xl text-sm font-bold flex items-center justify-between text-slate-300 hover:bg-violet-950/40"
+          >
+            <span className="flex items-center gap-2">
+              {soundEnabled ? (
+                <Volume2 className="w-4 h-4 text-cyan-400" />
+              ) : (
+                <VolumeX className="w-4 h-4 text-slate-500" />
+              )}
+              <span>เสียงเอฟเฟกต์ (Sound FX)</span>
+            </span>
+            <span
+              className={`text-xs px-2 py-0.5 rounded-full font-bold ${
+                soundEnabled
+                  ? 'bg-cyan-950 text-cyan-300 border border-cyan-500/40'
+                  : 'bg-slate-800 text-slate-400'
+              }`}
+            >
+              {soundEnabled ? 'เปิด (ON)' : 'ปิด (Muted)'}
+            </span>
+          </button>
+
           <div className="pt-2 border-t border-violet-500/20">
             {isAdminLoggedIn ? (
               <div className="flex gap-2">
                 <button
                   onClick={() => handleNavClick('admin')}
-                  className="flex-1 py-2.5 rounded-xl text-xs font-bold bg-violet-600 text-white text-center"
+                  className="flex-1 py-2.5 rounded-xl text-xs font-bold bg-violet-600 text-white text-center flex items-center justify-center gap-1.5"
                 >
-                  หลังบ้านแอดมิน
+                  <ShieldCheck className="w-4 h-4 text-cyan-300" />
+                  <span>หลังบ้านแอดมิน</span>
                 </button>
                 <button
                   onClick={adminLogout}
@@ -320,41 +407,28 @@ export const Navbar: React.FC = () => {
                 </button>
               </div>
             ) : currentCustomerUser ? (
-              <div className="space-y-2 p-3 rounded-xl bg-[#120E24] border border-amber-400/40">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-amber-400 text-slate-950 flex items-center justify-center font-black text-xs">
-                      👤
-                    </div>
-                    <div>
-                      <span className="text-xs font-bold text-white block">
-                        {currentCustomerUser.customerName || currentCustomerUser.username}
-                      </span>
-                      <span className="text-[11px] text-emerald-400 font-mono font-bold block">
-                        เครดิตคงเหลือ: ฿{currentCustomerUser.balance.toLocaleString()}
-                      </span>
-                    </div>
+              <div className="flex items-center justify-between p-3 rounded-xl bg-[#120E24] border border-violet-500/40">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-cyan-400 text-slate-950 flex items-center justify-center font-black text-xs">
+                    👤
                   </div>
-                  <button
-                    onClick={() => {
-                      setMobileMenuOpen(false);
-                      customerLogout();
-                    }}
-                    className="px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-950/60 text-rose-300 border border-rose-500/40 cursor-pointer"
-                  >
-                    ออกจากระบบ
-                  </button>
+                  <div>
+                    <span className="text-xs font-bold text-white block">
+                      {currentCustomerUser.customerName || currentCustomerUser.username}
+                    </span>
+                    <span className="text-[10px] text-cyan-300 font-mono block">
+                      ผู้ใช้งาน
+                    </span>
+                  </div>
                 </div>
                 <button
-                  type="button"
                   onClick={() => {
                     setMobileMenuOpen(false);
-                    setIsTopupModalOpen(true);
+                    customerLogout();
                   }}
-                  className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 font-black text-xs shadow-[0_0_12px_rgba(16,185,129,0.4)] cursor-pointer"
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-950/60 text-rose-300 border border-rose-500/40 cursor-pointer"
                 >
-                  <Plus className="w-3.5 h-3.5 stroke-[3]" />
-                  <span>เติมเครดิตด่วน (สแกนสลิป EasySlip)</span>
+                  ออกจากระบบ
                 </button>
               </div>
             ) : (
@@ -366,7 +440,7 @@ export const Navbar: React.FC = () => {
                 className="w-full neon-btn-purple py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2"
               >
                 <User className="w-4 h-4" />
-                <span>เข้าสู่ระบบ / สมาชิก</span>
+                <span>เข้าสู่ระบบ</span>
               </button>
             )}
           </div>

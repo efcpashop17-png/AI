@@ -27,6 +27,12 @@ import {
   Wallet,
   Plus,
   User,
+  Lock,
+  Camera,
+  Eye,
+  ShieldCheck,
+  FileSpreadsheet,
+  Download,
 } from 'lucide-react';
 import { TopUpOrder, TopUpStatus } from '../types';
 
@@ -38,15 +44,22 @@ export const CustomerDashboard: React.FC = () => {
     games,
     setNotification,
     currentCustomerUser,
+    isAdminLoggedIn,
     setIsTopupModalOpen,
     setIsAdminLoginModalOpen,
+    adminLogin,
+    customerLogin,
   } = useApp();
+
+  const isLoggedIn = isAdminLoggedIn || !!currentCustomerUser;
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [monthFilter, setMonthFilter] = useState<string>('this_month');
   const [selectedOrderForTimeline, setSelectedOrderForTimeline] = useState<TopUpOrder | null>(null);
   const [viewingSlipUrl, setViewingSlipUrl] = useState<string | null>(null);
+  const [viewingDeliveryProofOrder, setViewingDeliveryProofOrder] = useState<TopUpOrder | null>(null);
+  const [viewingFullscreenImage, setViewingFullscreenImage] = useState<{ url: string; title: string } | null>(null);
 
   // Current month & year reference
   const now = new Date();
@@ -54,9 +67,23 @@ export const CustomerDashboard: React.FC = () => {
   const currentMonth = now.getMonth(); // 0-indexed (9 for October)
   const currentMonthName = now.toLocaleDateString('th-TH', { month: 'long', year: 'numeric' });
 
-  // Filtered orders
+  // Strictly isolate orders per user
+  const userOrders = useMemo(() => {
+    if (isAdminLoggedIn && !currentCustomerUser) {
+      return orders;
+    }
+    if (!currentCustomerUser) return [];
+    return orders.filter(
+      (ord) =>
+        ord.customerId === currentCustomerUser.id ||
+        (ord.username && ord.username.toLowerCase() === currentCustomerUser.username.toLowerCase()) ||
+        (ord.contactPhone && ord.contactPhone === currentCustomerUser.contactPhone)
+    );
+  }, [orders, currentCustomerUser, isAdminLoggedIn]);
+
+  // Filtered orders for currently logged in user
   const filteredOrders = useMemo(() => {
-    return orders.filter((ord) => {
+    return userOrders.filter((ord) => {
       const ordDate = new Date(ord.createdAt);
 
       // Month filter
@@ -102,31 +129,31 @@ export const CustomerDashboard: React.FC = () => {
 
       return true;
     });
-  }, [orders, monthFilter, statusFilter, searchQuery, currentYear, currentMonth]);
+  }, [userOrders, monthFilter, statusFilter, searchQuery, currentYear, currentMonth]);
 
-  // Spending analytics
+  // Spending analytics for currently logged in user
   const thisMonthOrders = useMemo(() => {
-    return orders.filter((ord) => {
+    return userOrders.filter((ord) => {
       const d = new Date(ord.createdAt);
       return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
     });
-  }, [orders, currentYear, currentMonth]);
+  }, [userOrders, currentYear, currentMonth]);
 
   const thisMonthSpent = useMemo(() => {
     return thisMonthOrders.reduce((sum, o) => sum + (o.paymentStatus === 'paid' || o.status === 'completed' ? o.price : 0), 0);
   }, [thisMonthOrders]);
 
   const allTimeSpent = useMemo(() => {
-    return orders.reduce((sum, o) => sum + (o.paymentStatus === 'paid' || o.status === 'completed' ? o.price : 0), 0);
-  }, [orders]);
+    return userOrders.reduce((sum, o) => sum + (o.paymentStatus === 'paid' || o.status === 'completed' ? o.price : 0), 0);
+  }, [userOrders]);
 
   const completedCount = useMemo(() => {
-    return orders.filter((o) => o.status === 'completed').length;
-  }, [orders]);
+    return userOrders.filter((o) => o.status === 'completed').length;
+  }, [userOrders]);
 
   const inProgressCount = useMemo(() => {
-    return orders.filter((o) => o.status === 'processing' || o.status === 'verifying').length;
-  }, [orders]);
+    return userOrders.filter((o) => o.status === 'processing' || o.status === 'verifying').length;
+  }, [userOrders]);
 
   const handleCopy = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
@@ -145,6 +172,191 @@ export const CustomerDashboard: React.FC = () => {
       setActiveTab('store');
     }
   };
+
+  // Export Order History as CSV for Customer Accounting Records
+  const handleExportCSV = () => {
+    if (userOrders.length === 0) {
+      setNotification({
+        type: 'info',
+        message: 'ไม่มีรายการประวัติคำสั่งซื้อสำหรับการส่งออกไฟล์ CSV',
+      });
+      return;
+    }
+
+    const ordersToExport = filteredOrders.length > 0 ? filteredOrders : userOrders;
+
+    const statusTranslations: Record<string, string> = {
+      completed: 'จัดส่งสำเร็จแล้ว (Completed)',
+      processing: 'กำลังจัดส่ง (Processing)',
+      verifying: 'ชำระเงินแล้ว / รอตรวจสอบ (Verifying)',
+      pending_payment: 'รอการชำระเงิน (Pending Payment)',
+      failed: 'ยกเลิก / ล้มเหลว (Cancelled)',
+      custom: 'ข้อความพิเศษจากแอดมิน',
+    };
+
+    const paymentTranslations: Record<string, string> = {
+      paid: 'ชำระเงินแล้ว (Paid)',
+      unpaid: 'ยังไม่ชำระ (Unpaid)',
+    };
+
+    const paymentMethodTranslations: Record<string, string> = {
+      promptpay: 'PromptPay QR',
+      truemoney: 'TrueMoney Wallet',
+      bank_transfer: 'โอนผ่านธนาคาร',
+      credit_card: 'บัตรเครดิต/เดบิต',
+    };
+
+    const headers = [
+      'รหัสคำสั่งซื้อ (Order ID)',
+      'วันที่สั่งซื้อ (Date)',
+      'เวลา (Time)',
+      'เกม (Game)',
+      'แพ็กเกจ (Package)',
+      'จำนวน (Quantity)',
+      'ไอเทมในเกม (In-Game Item)',
+      'UID ผู้เล่น (Player UID)',
+      'เซิร์ฟเวอร์/โซน (Server/Zone)',
+      'ชื่อตัวละคร (Character Name)',
+      'ยอดชำระสุทธิ (Price THB)',
+      'ราคาเต็มปกติ (Original Price THB)',
+      'ส่วนลดที่ประหยัด (Savings THB)',
+      'ช่องทางชำระเงิน (Payment Method)',
+      'สถานะการชำระเงิน (Payment Status)',
+      'สถานะการจัดส่ง (Delivery Status)',
+      'เบอร์ติดต่อ (Phone)',
+      'อีเมล (Email)',
+      'หมายเหตุจากแอดมิน (Admin Note)',
+    ];
+
+    const escapeCSV = (val: string | number | undefined | null) => {
+      if (val === undefined || val === null) return '""';
+      const str = String(val).replace(/"/g, '""');
+      return `"${str}"`;
+    };
+
+    const rows = ordersToExport.map((ord) => {
+      const d = new Date(ord.createdAt);
+      const dateStr = d.toLocaleDateString('th-TH', { year: 'numeric', month: '2-digit', day: '2-digit' });
+      const timeStr = d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+      const savings = Math.max(0, (ord.originalPrice || ord.price) - ord.price);
+      const serverZone = [ord.serverId, ord.zoneId].filter(Boolean).join(' / ') || '-';
+      const deliveryStatus = ord.customStatus || statusTranslations[ord.status] || ord.status;
+      const paymentStatus = paymentTranslations[ord.paymentStatus] || ord.paymentStatus;
+      const paymentMethod = paymentMethodTranslations[ord.paymentMethod] || ord.paymentMethod;
+
+      return [
+        escapeCSV(ord.id),
+        escapeCSV(dateStr),
+        escapeCSV(timeStr),
+        escapeCSV(ord.gameName),
+        escapeCSV(ord.packageName),
+        escapeCSV(ord.quantity || 1),
+        escapeCSV(ord.inGameItem || '-'),
+        escapeCSV(ord.playerUid),
+        escapeCSV(serverZone),
+        escapeCSV(ord.playerNamePreview || '-'),
+        escapeCSV(ord.price),
+        escapeCSV(ord.originalPrice || ord.price),
+        escapeCSV(savings),
+        escapeCSV(paymentMethod),
+        escapeCSV(paymentStatus),
+        escapeCSV(deliveryStatus),
+        escapeCSV(ord.contactPhone || '-'),
+        escapeCSV(ord.contactEmail || '-'),
+        escapeCSV(ord.adminNote || '-'),
+      ].join(',');
+    });
+
+    // Prepend UTF-8 BOM (\uFEFF) so Microsoft Excel opens Thai characters seamlessly
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+
+    const safeUsername = currentCustomerUser?.username || (isAdminLoggedIn ? 'admin' : 'customer');
+    const nowIsoDate = new Date().toISOString().split('T')[0];
+    const filename = `EF_CPA_Shop_OrderHistory_${safeUsername}_${nowIsoDate}.csv`;
+
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    setNotification({
+      type: 'success',
+      message: `ดาวน์โหลดไฟล์ CSV ประวัติการสั่งซื้อ (${ordersToExport.length} รายการ) สำเร็จ สำหรับใช้ทำบัญชี`,
+    });
+  };
+
+  // Enforce login requirement for Customer Dashboard
+  if (!isLoggedIn) {
+    return (
+      <div className="max-w-xl mx-auto px-4 py-16 animate-fadeIn">
+        <div className="rounded-3xl bg-[#120E24] border border-violet-500/30 p-8 shadow-2xl text-center text-white space-y-5">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-600 via-fuchsia-600 to-cyan-500 mx-auto flex items-center justify-center shadow-lg shadow-violet-600/30 border border-violet-400/40">
+            <Lock className="w-8 h-8 text-white stroke-[2.5]" />
+          </div>
+
+          <span className="text-[11px] font-black uppercase tracking-wider px-3 py-1 rounded-full bg-violet-950 text-cyan-300 border border-violet-500/40 inline-flex items-center gap-1.5">
+            <Sparkles className="w-3 h-3 text-cyan-400" />
+            <span>ระบบบัญชีผู้ใช้งานส่วนบุคคล</span>
+          </span>
+
+          <h2 className="text-2xl sm:text-3xl font-black text-white font-heading">
+            เข้าสู่ระบบเพื่อดูแดชบอร์ดลูกค้า
+          </h2>
+
+          <p className="text-xs sm:text-sm text-violet-200/80 leading-relaxed font-medium">
+            กรุณาเข้าสู่ระบบก่อนเพื่อตรวจสอบประวัติคำสั่งซื้อ ยอดสั่งซื้อสต็อกในเดือนนี้ และดาวน์โหลดไฟล์ <strong>CSV สำหรับงานบัญชี</strong> เฉพาะบัญชีของคุณ ข้อมูลถูกแยกเป็นของยูสใครยูสมัน 100%
+          </p>
+
+          <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => setIsAdminLoginModalOpen(true)}
+              className="w-full sm:w-auto px-6 py-3.5 rounded-2xl neon-btn-purple text-white font-black text-sm shadow-xl flex items-center justify-center gap-2 cursor-pointer transition-all hover:scale-105"
+            >
+              <User className="w-4 h-4" />
+              <span>เข้าสู่ระบบ (Login)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => adminLogin('arm', 'Arm15658')}
+              className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-cyan-950/80 hover:bg-cyan-900/90 text-cyan-300 font-bold text-xs border border-cyan-500/40 cursor-pointer transition-all shadow-[0_0_15px_rgba(6,182,212,0.25)] flex items-center justify-center gap-1.5"
+            >
+              <ShieldCheck className="w-4 h-4 text-cyan-400" />
+              <span>เข้าสู่ระบบด่วน (แอดมิน Arm)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => customerLogin('dealer_01', '123456')}
+              className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-violet-950/80 hover:bg-violet-900/90 text-violet-300 font-bold text-xs border border-violet-500/40 cursor-pointer transition-all flex items-center justify-center gap-1.5"
+            >
+              <Sparkles className="w-4 h-4 text-amber-300" />
+              <span>เข้าสู่ระบบด่วน (ลูกค้า Dealer 01)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('store')}
+              className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-[#0B0813] hover:bg-[#1B1433] text-violet-300 hover:text-white font-bold text-xs border border-violet-500/30 cursor-pointer transition-colors"
+            >
+              กลับหน้าแรก
+            </button>
+          </div>
+
+          <p className="text-[11px] text-slate-400 font-mono">
+            💡 บัญชีสำหรับทดสอบ: แอดมิน (arm / Arm15658) หรือ ลูกค้า (dealer_01 / 123456)
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fadeIn">
@@ -172,11 +384,18 @@ export const CustomerDashboard: React.FC = () => {
 
           <div className="flex flex-wrap items-center gap-3">
             <button
-              onClick={() => setIsTopupModalOpen(true)}
-              className="px-5 py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 text-xs sm:text-sm font-black flex items-center gap-2 shadow-[0_0_20px_rgba(16,185,129,0.5)] cursor-pointer transition-all hover:scale-105 font-heading"
+              type="button"
+              onClick={handleExportCSV}
+              disabled={userOrders.length === 0}
+              className={`px-4 py-3 rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer ${
+                userOrders.length === 0
+                  ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white border border-emerald-400/40 shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:scale-105'
+              }`}
+              title="ดาวน์โหลดประวัติคำสั่งซื้อทั้งหมดเป็นไฟล์ CSV สำหรับงานบัญชี"
             >
-              <Plus className="w-4 h-4 stroke-[3]" />
-              <span>เติมเครดิตด้วยสลิป</span>
+              <FileSpreadsheet className="w-4 h-4 text-emerald-200" />
+              <span>ส่งออก CSV ทำบัญชี</span>
             </button>
 
             <button
@@ -184,49 +403,40 @@ export const CustomerDashboard: React.FC = () => {
               className="px-5 py-3 rounded-2xl neon-btn-purple text-xs sm:text-sm font-bold flex items-center gap-2 shadow-[0_0_20px_rgba(168,85,247,0.4)] cursor-pointer transition-all hover:scale-105 font-heading"
             >
               <Zap className="w-4 h-4 fill-current text-white" />
-              <span>สั่งซื้อสต็อกใหม่</span>
+              <span>สั่งซื้อสินค้า</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* Customer User Wallet Bar */}
+      {/* Customer User Account Bar */}
       {currentCustomerUser ? (
-        <div className="rounded-3xl bg-gradient-to-r from-[#171A33] via-[#120E24] to-[#162725] border-2 border-emerald-500/40 p-5 sm:p-6 shadow-[0_0_30px_rgba(16,185,129,0.2)] backdrop-blur-xl mb-8 flex flex-col md:flex-row items-center justify-between gap-5">
+        <div className="rounded-3xl bg-gradient-to-r from-[#171A33] via-[#120E24] to-[#162725] border-2 border-violet-500/40 p-5 sm:p-6 shadow-[0_0_30px_rgba(139,92,246,0.2)] backdrop-blur-xl mb-8 flex flex-col md:flex-row items-center justify-between gap-5">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 text-slate-950 flex items-center justify-center font-black text-2xl shadow-[0_0_20px_rgba(245,158,11,0.4)] shrink-0">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-cyan-400 to-violet-600 text-slate-950 flex items-center justify-center font-black text-2xl shadow-[0_0_20px_rgba(6,182,212,0.4)] shrink-0">
               👤
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-lg font-black text-white">{currentCustomerUser.customerName || currentCustomerUser.username}</span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-950/80 text-amber-300 border border-amber-500/40">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-950/80 text-cyan-300 border border-violet-500/40">
                   {currentCustomerUser.role === 'vip_dealer' ? '👑 วีไอพีดีลเลอร์' : currentCustomerUser.role === 'agent' ? '🚀 ตัวแทนจำหน่าย' : '⭐ สมาชิกลูกค้า'}
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
-                ไอดี: <span className="font-mono text-cyan-300">@{currentCustomerUser.username}</span> {currentCustomerUser.contactPhone && `• เบอร์: ${currentCustomerUser.contactPhone}`}
+                ไอดีบัญชี: <span className="font-mono text-cyan-300 font-bold">@{currentCustomerUser.username}</span>
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-5 w-full md:w-auto justify-between md:justify-end">
-            <div className="text-right">
-              <span className="text-[11px] font-bold text-emerald-300 uppercase tracking-wider block">
-                ยอดเครดิตคงเหลือในกระเป๋า
-              </span>
-              <div className="text-3xl font-black text-emerald-400 font-mono tracking-tight tabular-nums drop-shadow-[0_0_15px_rgba(16,185,129,0.4)]">
-                ฿{currentCustomerUser.balance.toLocaleString()}
-              </div>
-            </div>
-
+          <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => setIsTopupModalOpen(true)}
-              className="px-5 py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs sm:text-sm flex items-center gap-2 shadow-[0_0_20px_rgba(16,185,129,0.5)] cursor-pointer hover:scale-105 transition-all"
+              onClick={() => setActiveTab('store')}
+              className="px-5 py-3 rounded-2xl bg-gradient-to-r from-violet-600 to-cyan-500 hover:from-violet-500 hover:to-cyan-400 text-white font-extrabold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-violet-600/30 cursor-pointer hover:scale-105 transition-all"
             >
-              <Wallet className="w-4 h-4" />
-              <span>เติมเครดิต</span>
+              <Zap className="w-4 h-4 fill-current" />
+              <span>ไปที่หน้าร้านค้าเพื่อสั่งซื้อ</span>
             </button>
           </div>
         </div>
@@ -237,8 +447,8 @@ export const CustomerDashboard: React.FC = () => {
               <User className="w-5 h-5 text-violet-400" />
             </div>
             <div>
-              <span className="text-sm font-bold text-white block">เข้าสู่ระบบสมาชิกลูกค้า เพื่อเติมเครดิตและใช้งานกระเป๋าเงิน</span>
-              <span className="text-xs text-violet-300/70">สแกนสลิปผ่าน EasySlip ตรวจสอบยอดเงินอัตโนมัติ 24 ชม.</span>
+              <span className="text-sm font-bold text-white block">เข้าสู่ระบบ เพื่อดูสถิติและประวัติคำสั่งซื้อของคุณ</span>
+              <span className="text-xs text-violet-300/70">ระบบชำระเงินโอนตรงผ่าน PromptPay / QR Code พร้อมแนบสลิปอัตโนมัติ</span>
             </div>
           </div>
 
@@ -246,7 +456,7 @@ export const CustomerDashboard: React.FC = () => {
             onClick={() => setIsAdminLoginModalOpen(true)}
             className="neon-btn-purple px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap cursor-pointer hover:scale-105 transition-all"
           >
-            เข้าสู่ระบบลูกค้า
+            เข้าสู่ระบบ
           </button>
         </div>
       )}
@@ -423,7 +633,7 @@ export const CustomerDashboard: React.FC = () => {
 
       {/* ORDER HISTORY LIST (User Requested Feature) */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between px-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-2">
           <div className="flex items-center gap-2">
             <Package className="w-5 h-5 text-cyan-400" />
             <h2 className="text-lg sm:text-xl font-black text-white font-heading">
@@ -434,9 +644,23 @@ export const CustomerDashboard: React.FC = () => {
             </span>
           </div>
 
-          <span className="text-xs text-violet-400/80 font-medium hidden sm:inline-block">
-            เรียงตามวันที่ทำรายการล่าสุด
-          </span>
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={handleExportCSV}
+              disabled={userOrders.length === 0}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg transition-all cursor-pointer ${
+                userOrders.length === 0
+                  ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white border border-emerald-400/40 shadow-emerald-950/50 hover:scale-105'
+              }`}
+              title="ดาวน์โหลดประวัติคำสั่งซื้อทั้งหมดเป็นไฟล์ CSV สำหรับงานบัญชี"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-emerald-200" />
+              <span>ส่งออก CSV (สำหรับทำบัญชี)</span>
+              <Download className="w-3.5 h-3.5 opacity-80" />
+            </button>
+          </div>
         </div>
 
         {filteredOrders.length === 0 ? (
@@ -651,6 +875,18 @@ export const CustomerDashboard: React.FC = () => {
                           <span>ดูสลิปหลักฐาน</span>
                         </button>
                       )}
+
+                      {(ord.status === 'completed' || ord.preDeliveryImageUrl || ord.postDeliveryImageUrl) && (
+                        <button
+                          type="button"
+                          onClick={() => setViewingDeliveryProofOrder(ord)}
+                          className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-950/80 to-teal-950/80 hover:from-emerald-900 hover:to-teal-900 text-emerald-300 hover:text-white border border-emerald-500/40 font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-[0_0_12px_rgba(16,185,129,0.25)]"
+                          title="ดูภาพจำนวนของก่อนส่งและหลังส่ง (2 ช่อง) ที่แอดมินอัปโหลด"
+                        >
+                          <Camera className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>ดูรูปก่อนส่ง/หลังส่ง (2 ช่อง)</span>
+                        </button>
+                      )}
                     </div>
 
                     <button
@@ -787,6 +1023,215 @@ export const CustomerDashboard: React.FC = () => {
             </h4>
             <div className="rounded-2xl overflow-hidden bg-black/60 border border-slate-700 flex items-center justify-center max-h-[70vh]">
               <img src={viewingSlipUrl} alt="สลิปการโอน" className="w-full h-auto object-contain max-h-[70vh]" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: 2-SLOT DELIVERY PROOF MODAL (ก่อนส่ง & หลังส่ง) */}
+      {viewingDeliveryProofOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn overflow-y-auto">
+          <div className="relative max-w-3xl w-full bg-[#120E24] border-2 border-emerald-500/60 rounded-3xl p-6 sm:p-7 shadow-2xl my-8 text-white">
+            <button
+              type="button"
+              onClick={() => setViewingDeliveryProofOrder(null)}
+              className="absolute top-5 right-5 p-2 rounded-xl text-slate-400 hover:text-white hover:bg-violet-950/60 cursor-pointer transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+
+            {/* Header */}
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white shadow-lg shadow-emerald-500/30">
+                <Camera className="w-6 h-6 stroke-[2.5]" />
+              </div>
+              <div>
+                <span className="text-[11px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-500/40 inline-block mb-1">
+                  PROOF OF DELIVERY (หลักฐานการจัดส่ง)
+                </span>
+                <h3 className="text-xl sm:text-2xl font-black text-white font-heading">
+                  หลักฐานจัดส่งสินค้า (ก่อนส่ง &amp; หลังส่ง)
+                </h3>
+                <p className="text-xs text-violet-200/80 mt-0.5 font-medium">
+                  คำสั่งซื้อ: <span className="font-mono text-cyan-300 font-bold">{viewingDeliveryProofOrder.id}</span> | {viewingDeliveryProofOrder.gameName} ({viewingDeliveryProofOrder.packageName}) | ไอดี: <span className="font-mono text-emerald-400 font-bold">{viewingDeliveryProofOrder.playerUid}</span>
+                </p>
+              </div>
+            </div>
+
+            {/* 2 DISTINCT BOXES */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+              {/* Box 1: ภาพก่อนส่ง */}
+              <div className="p-4 rounded-2xl bg-[#0B0813] border-2 border-amber-500/40 flex flex-col justify-between space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <Camera className="w-4 h-4 text-amber-400" />
+                    <span>ช่องที่ 1: ภาพจำนวนของก่อนส่ง</span>
+                  </span>
+                  {viewingDeliveryProofOrder.preDeliveryImageUrl ? (
+                    <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-500/40">
+                      แนบภาพแล้ว
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-bold text-slate-400">ยังไม่มีรูป</span>
+                  )}
+                </div>
+
+                {viewingDeliveryProofOrder.preDeliveryImageUrl ? (
+                  <div className="space-y-2">
+                    <div
+                      onClick={() => setViewingFullscreenImage({
+                        url: viewingDeliveryProofOrder.preDeliveryImageUrl || '',
+                        title: `ภาพที่ 1: จำนวนของก่อนส่ง - ออเดอร์ ${viewingDeliveryProofOrder.id}`,
+                      })}
+                      className="relative w-full h-56 rounded-xl overflow-hidden bg-black border border-amber-400/40 hover:border-amber-400 cursor-pointer group shadow-md flex items-center justify-center transition-all"
+                      title="คลิกเพื่อดูรูปขยายเต็มจอ"
+                    >
+                      <img
+                        src={viewingDeliveryProofOrder.preDeliveryImageUrl}
+                        alt="ภาพก่อนส่ง"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                      />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-2 transition-opacity">
+                        <Eye className="w-6 h-6 text-white" />
+                        <span className="text-xs font-bold text-white">คลิกเพื่อดูขยายเต็มจอ</span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setViewingFullscreenImage({
+                        url: viewingDeliveryProofOrder.preDeliveryImageUrl || '',
+                        title: `ภาพที่ 1: จำนวนของก่อนส่ง - ออเดอร์ ${viewingDeliveryProofOrder.id}`,
+                      })}
+                      className="w-full py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs font-bold border border-amber-500/40 flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>เปิดดูภาพก่อนส่งขนาดเต็ม</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="w-full h-56 rounded-xl bg-[#120E24] border border-dashed border-slate-700 flex flex-col items-center justify-center p-4 text-center">
+                    <Camera className="w-8 h-8 text-slate-600 mb-2" />
+                    <span className="text-xs font-bold text-slate-400">ยังไม่มีภาพก่อนส่ง</span>
+                    <span className="text-[11px] text-slate-500 mt-1">
+                      แอดมินจะอัปโหลดภาพจำนวนของเดิมในไอดีให้ที่นี่
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Box 2: ภาพหลังส่ง */}
+              <div className="p-4 rounded-2xl bg-[#0B0813] border-2 border-emerald-500/40 flex flex-col justify-between space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-emerald-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <Camera className="w-4 h-4 text-emerald-400" />
+                    <span>ช่องที่ 2: ภาพจำนวนของหลังส่ง</span>
+                  </span>
+                  {viewingDeliveryProofOrder.postDeliveryImageUrl ? (
+                    <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-500/40">
+                      แนบภาพแล้ว
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-bold text-slate-400">ยังไม่มีรูป</span>
+                  )}
+                </div>
+
+                {viewingDeliveryProofOrder.postDeliveryImageUrl ? (
+                  <div className="space-y-2">
+                    <div
+                      onClick={() => setViewingFullscreenImage({
+                        url: viewingDeliveryProofOrder.postDeliveryImageUrl || '',
+                        title: `ภาพที่ 2: จำนวนของหลังส่ง - ออเดอร์ ${viewingDeliveryProofOrder.id}`,
+                      })}
+                      className="relative w-full h-56 rounded-xl overflow-hidden bg-black border border-emerald-400/40 hover:border-emerald-400 cursor-pointer group shadow-md flex items-center justify-center transition-all"
+                      title="คลิกเพื่อดูรูปขยายเต็มจอ"
+                    >
+                      <img
+                        src={viewingDeliveryProofOrder.postDeliveryImageUrl}
+                        alt="ภาพหลังส่ง"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                      />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-2 transition-opacity">
+                        <Eye className="w-6 h-6 text-white" />
+                        <span className="text-xs font-bold text-white">คลิกเพื่อดูขยายเต็มจอ</span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setViewingFullscreenImage({
+                        url: viewingDeliveryProofOrder.postDeliveryImageUrl || '',
+                        title: `ภาพที่ 2: จำนวนของหลังส่ง - ออเดอร์ ${viewingDeliveryProofOrder.id}`,
+                      })}
+                      className="w-full py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 text-xs font-bold border border-emerald-500/40 flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>เปิดดูภาพหลังส่งขนาดเต็ม</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="w-full h-56 rounded-xl bg-[#120E24] border border-dashed border-slate-700 flex flex-col items-center justify-center p-4 text-center">
+                    <Camera className="w-8 h-8 text-slate-600 mb-2" />
+                    <span className="text-xs font-bold text-slate-400">ยังไม่มีภาพหลังส่ง</span>
+                    <span className="text-[11px] text-slate-500 mt-1">
+                      แอดมินจะอัปโหลดภาพจำนวนของที่เพิ่มขึ้นหลังส่งมอบสำเร็จ
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-between pt-4 border-t border-violet-500/20">
+              <span className="text-xs text-violet-300/80 flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                <span>ตรวจสอบความถูกต้องโดยร้านค้า 100% ปลอดภัยและโปร่งใส</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setViewingDeliveryProofOrder(null)}
+                className="px-5 py-2.5 rounded-xl bg-violet-900/60 hover:bg-violet-800 text-white font-bold text-xs cursor-pointer transition-colors"
+              >
+                ปิดหน้าต่าง
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FULLSCREEN ZOOM MODAL */}
+      {viewingFullscreenImage && (
+        <div
+          onClick={() => setViewingFullscreenImage(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/95 backdrop-blur-md animate-fadeIn cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative max-w-4xl w-full bg-[#120E24] border-2 border-cyan-500/60 rounded-3xl p-4 sm:p-6 shadow-2xl text-center cursor-default"
+          >
+            <button
+              onClick={() => setViewingFullscreenImage(null)}
+              className="absolute top-4 right-4 p-2 rounded-xl text-slate-400 hover:text-white hover:bg-violet-950 cursor-pointer"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            <h4 className="text-sm sm:text-base font-extrabold text-white mb-3 text-left line-clamp-1 pr-10">
+              {viewingFullscreenImage.title}
+            </h4>
+            <div className="rounded-2xl overflow-hidden bg-black flex items-center justify-center max-h-[75vh]">
+              <img
+                src={viewingFullscreenImage.url}
+                alt={viewingFullscreenImage.title}
+                className="w-full h-auto object-contain max-h-[75vh]"
+              />
+            </div>
+            <div className="mt-4 flex justify-between items-center text-xs text-slate-400">
+              <span>คลิกภายนอกหรือปุ่มปิดเพื่อกลับหน้าเดิม</span>
+              <button
+                type="button"
+                onClick={() => setViewingFullscreenImage(null)}
+                className="px-4 py-1.5 rounded-lg bg-violet-900 hover:bg-violet-800 text-white font-bold cursor-pointer"
+              >
+                ปิด
+              </button>
             </div>
           </div>
         </div>

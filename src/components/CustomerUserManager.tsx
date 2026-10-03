@@ -51,17 +51,11 @@ export const CustomerUserManager: React.FC = () => {
   const [showPasswordMap, setShowPasswordMap] = useState<Record<string, boolean>>({});
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // New user form state
+  // New user form state (Simplified to Username, Password, and Contact Channel - Admin Only)
   const [formData, setFormData] = useState({
     username: '',
     password: '',
-    customerName: '',
-    contactPhone: '',
-    contactEmail: '',
-    role: 'wholesale_customer' as 'wholesale_customer' | 'vip_dealer' | 'agent',
-    balance: 0,
-    notes: '',
-    status: 'active' as 'active' | 'suspended',
+    contactChannel: '',
   });
 
   const togglePasswordVisibility = (id: string) => {
@@ -102,10 +96,10 @@ export const CustomerUserManager: React.FC = () => {
 
   const handleAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.username.trim() || !formData.password.trim() || !formData.customerName.trim()) {
+    if (!formData.username.trim() || !formData.password.trim() || !formData.contactChannel.trim()) {
       setNotification({
         type: 'error',
-        message: 'กรุณากรอก Username, Password และชื่อลูกค้าให้ครบถ้วน',
+        message: 'กรุณากรอกชื่อผู้ใช้ (Username), รหัสผ่าน (Password) และช่องทางติดต่อให้ครบถ้วน',
       });
       return;
     }
@@ -123,26 +117,24 @@ export const CustomerUserManager: React.FC = () => {
     addCustomerUser({
       username: cleanUsername,
       password: formData.password.trim(),
-      customerName: formData.customerName.trim(),
-      contactPhone: formData.contactPhone.trim() || '-',
-      contactEmail: formData.contactEmail.trim(),
-      role: formData.role,
-      balance: Number(formData.balance) || 0,
-      notes: formData.notes.trim(),
-      status: formData.status,
+      customerName: cleanUsername,
+      contactChannel: formData.contactChannel.trim(),
+      contactPhone: formData.contactChannel.trim(),
+      role: 'wholesale_customer',
+      balance: 0,
+      notes: `ช่องทางติดต่อ: ${formData.contactChannel.trim()}`,
+      status: 'active',
     });
 
     setIsAddModalOpen(false);
     setFormData({
       username: '',
       password: '',
-      customerName: '',
-      contactPhone: '',
-      contactEmail: '',
-      role: 'wholesale_customer',
-      balance: 0,
-      notes: '',
-      status: 'active',
+      contactChannel: '',
+    });
+    setNotification({
+      type: 'success',
+      message: `สมัครยูสเซอร์ @${cleanUsername} ให้ลูกค้าเรียบร้อยแล้ว`,
     });
   };
 
@@ -150,17 +142,57 @@ export const CustomerUserManager: React.FC = () => {
     e.preventDefault();
     if (!editingUser) return;
 
+    const cleanUsername = editingUser.username.trim().toLowerCase();
+    if (!cleanUsername) {
+      setNotification({
+        type: 'error',
+        message: 'กรุณากรอกชื่อผู้ใช้ (Username)',
+      });
+      return;
+    }
+
+    if (!editingUser.password.trim()) {
+      setNotification({
+        type: 'error',
+        message: 'กรุณากรอกรหัสผ่าน (Password)',
+      });
+      return;
+    }
+
+    const contactVal = (editingUser.contactChannel || editingUser.contactPhone || '').trim();
+    if (!contactVal) {
+      setNotification({
+        type: 'error',
+        message: 'กรุณาระบุช่องทางติดต่อ (LINE ID, เบอร์โทรศัพท์ หรือ Facebook)',
+      });
+      return;
+    }
+
+    const isDuplicate = customerUsers.some(
+      (u) => u.id !== editingUser.id && u.username.toLowerCase() === cleanUsername
+    );
+    if (isDuplicate) {
+      setNotification({
+        type: 'error',
+        message: `Username "${cleanUsername}" มีอยู่ในระบบแล้ว กรุณาใช้ชื่ออื่น`,
+      });
+      return;
+    }
+
     updateCustomerUser(editingUser.id, {
-      customerName: editingUser.customerName,
-      password: editingUser.password,
-      contactPhone: editingUser.contactPhone,
-      contactEmail: editingUser.contactEmail,
-      role: editingUser.role,
-      notes: editingUser.notes,
-      status: editingUser.status,
+      username: cleanUsername,
+      customerName: cleanUsername,
+      password: editingUser.password.trim(),
+      contactChannel: contactVal,
+      contactPhone: contactVal,
+      notes: `ช่องทางติดต่อ: ${contactVal}`,
     });
 
     setEditingUser(null);
+    setNotification({
+      type: 'success',
+      message: `บันทึกการแก้ไขยูสเซอร์ @${cleanUsername} เรียบร้อยแล้ว`,
+    });
   };
 
   const handleAdjustBalanceSubmit = (e: React.FormEvent) => {
@@ -325,7 +357,7 @@ export const CustomerUserManager: React.FC = () => {
             <thead className="bg-[#0b0e17] text-slate-400 uppercase text-[11px] font-black border-b border-slate-800">
               <tr>
                 <th className="py-3 px-4">ข้อมูลบัญชี (Username / รหัสผ่าน)</th>
-                <th className="py-3 px-4">ชื่อลูกค้า / ช่องทางติดต่อ</th>
+                <th className="py-3 px-4">ช่องทางติดต่อ (🔒 แอดมินเห็นคนเดียว)</th>
                 <th className="py-3 px-4">ระดับสมาชิก</th>
                 <th className="py-3 px-4 text-right">ยอดเครดิตคงเหลือ</th>
                 <th className="py-3 px-4 text-center">สถานะ</th>
@@ -386,25 +418,17 @@ export const CustomerUserManager: React.FC = () => {
                         </div>
                       </td>
 
-                      {/* Customer Name & Contacts */}
+                      {/* Contact Channel (Admin Only) */}
                       <td className="py-3.5 px-4">
-                        <div className="space-y-0.5">
-                          <p className="font-black text-white text-sm">{user.customerName}</p>
-                          <p className="text-[11px] text-slate-300 flex items-center gap-1">
-                            <Phone className="w-3 h-3 text-cyan-400" />
-                            <span>{user.contactPhone}</span>
+                        <div className="space-y-1">
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded bg-amber-400/20 text-amber-300 border border-amber-400/30 inline-flex items-center gap-1">
+                            <Lock className="w-2.5 h-2.5" />
+                            <span>แอดมินเห็นคนเดียว</span>
+                          </span>
+                          <p className="text-xs font-bold text-white flex items-center gap-1.5">
+                            <Phone className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                            <span>{user.contactChannel || user.contactPhone || user.notes || '-'}</span>
                           </p>
-                          {user.contactEmail && (
-                            <p className="text-[10px] text-slate-400 flex items-center gap-1">
-                              <Mail className="w-3 h-3 text-slate-500" />
-                              <span>{user.contactEmail}</span>
-                            </p>
-                          )}
-                          {user.notes && (
-                            <p className="text-[10px] text-amber-300/80 italic font-normal">
-                              Note: {user.notes}
-                            </p>
-                          )}
                         </div>
                       </td>
 
@@ -449,15 +473,21 @@ export const CustomerUserManager: React.FC = () => {
 
                       {/* Status */}
                       <td className="py-3.5 px-4 text-center">
-                        <span
-                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-black inline-block ${
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const nextStatus = user.status === 'active' ? 'suspended' : 'active';
+                            updateCustomerUser(user.id, { status: nextStatus });
+                          }}
+                          title="คลิกเพื่อสลับสถานะเปิดใช้งาน / ระงับชั่วคราว"
+                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-black inline-block transition-transform hover:scale-105 cursor-pointer ${
                             user.status === 'active'
-                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                              : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30'
+                              : 'bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30'
                           }`}
                         >
                           {user.status === 'active' ? 'เปิดใช้งาน' : 'ระงับชั่วคราว'}
-                        </span>
+                        </button>
                       </td>
 
                       {/* Creation Date */}
@@ -537,120 +567,60 @@ export const CustomerUserManager: React.FC = () => {
             </div>
 
             <form onSubmit={handleAddSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1">
-                    ชื่อผู้ใช้ (Username) *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.username}
-                    onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                    placeholder="เช่น shop_gamer01"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#0b0e17] border-2 border-slate-700 text-sm text-white font-mono outline-none focus:border-amber-400"
-                  />
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs font-bold text-slate-300">รหัสผ่าน (Password) *</label>
-                    <button
-                      type="button"
-                      onClick={() => setFormData({ ...formData, password: generateRandomPassword() })}
-                      className="text-[11px] text-amber-400 hover:underline flex items-center gap-1 font-bold cursor-pointer"
-                    >
-                      <Sparkles className="w-3 h-3" />
-                      <span>สุ่มรหัสผ่าน</span>
-                    </button>
-                  </div>
-                  <input
-                    type="text"
-                    required
-                    value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    placeholder="รหัสผ่านเข้าใช้งาน"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#0b0e17] border-2 border-slate-700 text-sm text-white font-mono outline-none focus:border-amber-400"
-                  />
-                </div>
-              </div>
-
               <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1">
-                  ชื่อลูกค้า / ชื่อร้านค้า *
+                <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                  ชื่อผู้ใช้ (Username) *
                 </label>
                 <input
                   type="text"
                   required
-                  value={formData.customerName}
-                  onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
-                  placeholder="เช่น คุณกฤษดา หรือ ร้านเอ็กซ์เกมเมอร์"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#0b0e17] border-2 border-slate-700 text-sm text-white outline-none focus:border-amber-400"
+                  value={formData.username}
+                  onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                  placeholder="เช่น shop_gamer01"
+                  className="w-full px-4 py-3 rounded-xl bg-[#0b0e17] border-2 border-slate-700 text-sm text-white font-mono outline-none focus:border-amber-400"
                 />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1">เบอร์โทรศัพท์ติดต่อ</label>
-                  <input
-                    type="text"
-                    value={formData.contactPhone}
-                    onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
-                    placeholder="08X-XXX-XXXX"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#0b0e17] border-2 border-slate-700 text-sm text-white outline-none focus:border-amber-400 font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1">อีเมลลูกค้า (ถ้ามี)</label>
-                  <input
-                    type="email"
-                    value={formData.contactEmail}
-                    onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
-                    placeholder="customer@email.com"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#0b0e17] border-2 border-slate-700 text-sm text-white outline-none focus:border-amber-400"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1">ระดับสมาชิก (Tier)</label>
-                  <select
-                    value={formData.role}
-                    onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#0b0e17] border-2 border-slate-700 text-xs text-white outline-none focus:border-amber-400 font-bold"
-                  >
-                    <option value="wholesale_customer">ลูกค้าราคาส่งทั่วไป</option>
-                    <option value="vip_dealer">VIP Dealer (เรทราคาส่งพิเศษ)</option>
-                    <option value="agent">ตัวแทนจำหน่าย (Agent)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1">เครดิตเริ่มต้น (บาท)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={formData.balance}
-                    onChange={(e) => setFormData({ ...formData, balance: Number(e.target.value) })}
-                    placeholder="0"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#0b0e17] border-2 border-slate-700 text-sm text-white font-mono outline-none focus:border-amber-400"
-                  />
-                </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1">
-                  หมายเหตุของแอดมิน (เช่น LINE ID หรือข้อตกลงพิเศษ)
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-bold text-slate-300">รหัสผ่าน (Password) *</label>
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, password: generateRandomPassword() })}
+                    className="text-[11px] text-amber-400 hover:underline flex items-center gap-1 font-bold cursor-pointer"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>สุ่มรหัสผ่าน</span>
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  required
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  placeholder="ระบุรหัสผ่านเข้าใช้งาน"
+                  className="w-full px-4 py-3 rounded-xl bg-[#0b0e17] border-2 border-slate-700 text-sm text-white font-mono outline-none focus:border-amber-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                  ช่องทางติดต่อ (LINE ID, เบอร์โทรศัพท์, Facebook) *
                 </label>
                 <input
                   type="text"
-                  value={formData.notes}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  placeholder="LINE ID: arm_game, ลูกค้าประจำร้าน 2 ปี"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#0b0e17] border-2 border-slate-700 text-xs text-white outline-none focus:border-amber-400"
+                  required
+                  value={formData.contactChannel}
+                  onChange={(e) => setFormData({ ...formData, contactChannel: e.target.value })}
+                  placeholder="เช่น LINE ID: arm_game หรือ โทร 08X-XXX-XXXX"
+                  className="w-full px-4 py-3 rounded-xl bg-[#0b0e17] border-2 border-slate-700 text-sm text-white outline-none focus:border-amber-400"
                 />
+                <div className="mt-2.5 p-3 rounded-xl bg-amber-400/10 border border-amber-400/30 text-amber-300 text-xs flex items-center gap-2">
+                  <Lock className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span className="text-[11px] font-medium leading-relaxed">
+                    🔒 ข้อมูลช่องทางติดต่อนี้ แอดมินสามารถเห็นได้คนเดียวเท่านั้น (ลูกค้าไม่สามารถมองเห็นได้)
+                  </span>
+                </div>
               </div>
 
               <div className="pt-2 flex gap-3">
@@ -684,78 +654,83 @@ export const CustomerUserManager: React.FC = () => {
               <X className="w-5 h-5" />
             </button>
 
-            <h3 className="text-lg font-black text-white font-display mb-4">
-              แก้ไขข้อมูลยูสเซอร์: <span className="text-amber-400 font-mono">@{editingUser.username}</span>
-            </h3>
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-10 h-10 rounded-xl bg-amber-400/20 text-amber-300 flex items-center justify-center font-bold">
+                <Edit2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-white font-display">
+                  แก้ไขข้อมูลยูสเซอร์ลูกค้า
+                </h3>
+                <p className="text-xs text-slate-400">
+                  แก้ไขเฉพาะชื่อผู้ใช้ (Username), รหัสผ่าน (Password) และช่องทางติดต่อ
+                </p>
+              </div>
+            </div>
 
             <form onSubmit={handleEditSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1">รหัสผ่าน (Password)</label>
+                <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                  ชื่อผู้ใช้ (Username) *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editingUser.username}
+                  onChange={(e) => setEditingUser({ ...editingUser, username: e.target.value })}
+                  placeholder="เช่น shop_gamer01"
+                  className="w-full px-4 py-3 rounded-xl bg-[#0b0e17] border-2 border-slate-700 text-sm text-amber-300 font-mono font-bold outline-none focus:border-amber-400"
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-bold text-slate-300">รหัสผ่าน (Password) *</label>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setEditingUser({ ...editingUser, password: generateRandomPassword() })
+                    }
+                    className="text-[11px] text-amber-400 hover:underline flex items-center gap-1 font-bold cursor-pointer"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>สุ่มรหัสใหม่</span>
+                  </button>
+                </div>
                 <input
                   type="text"
                   required
                   value={editingUser.password}
                   onChange={(e) => setEditingUser({ ...editingUser, password: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#0b0e17] border-2 border-slate-700 text-sm text-white font-mono outline-none focus:border-amber-400"
+                  placeholder="ระบุรหัสผ่านเข้าใช้งาน"
+                  className="w-full px-4 py-3 rounded-xl bg-[#0b0e17] border-2 border-slate-700 text-sm text-white font-mono outline-none focus:border-amber-400"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1">ชื่อลูกค้า / ร้านค้า</label>
+                <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                  ช่องทางติดต่อ (LINE ID, เบอร์โทรศัพท์, Facebook) *
+                </label>
                 <input
                   type="text"
                   required
-                  value={editingUser.customerName}
-                  onChange={(e) => setEditingUser({ ...editingUser, customerName: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#0b0e17] border-2 border-slate-700 text-sm text-white outline-none focus:border-amber-400"
+                  value={editingUser.contactChannel || editingUser.contactPhone || ''}
+                  onChange={(e) =>
+                    setEditingUser({
+                      ...editingUser,
+                      contactChannel: e.target.value,
+                      contactPhone: e.target.value,
+                    })
+                  }
+                  placeholder="เช่น LINE ID: arm_game หรือ โทร 08X-XXX-XXXX"
+                  className="w-full px-4 py-3 rounded-xl bg-[#0b0e17] border-2 border-slate-700 text-sm text-white outline-none focus:border-amber-400"
                 />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1">เบอร์โทรศัพท์</label>
-                  <input
-                    type="text"
-                    value={editingUser.contactPhone}
-                    onChange={(e) => setEditingUser({ ...editingUser, contactPhone: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#0b0e17] border-2 border-slate-700 text-sm text-white font-mono outline-none focus:border-amber-400"
-                  />
+                <div className="mt-2.5 p-3 rounded-xl bg-amber-400/10 border border-amber-400/30 text-amber-300 text-xs flex items-center gap-2">
+                  <Lock className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span className="text-[11px] font-medium leading-relaxed">
+                    🔒 ข้อมูลช่องทางติดต่อนี้ แอดมินสามารถเห็นได้คนเดียวเท่านั้น (ลูกค้าไม่สามารถมองเห็นได้)
+                  </span>
                 </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1">ระดับสมาชิก</label>
-                  <select
-                    value={editingUser.role}
-                    onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value as any })}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#0b0e17] border-2 border-slate-700 text-xs text-white outline-none focus:border-amber-400 font-bold"
-                  >
-                    <option value="wholesale_customer">ลูกค้าราคาส่งทั่วไป</option>
-                    <option value="vip_dealer">VIP Dealer</option>
-                    <option value="agent">ตัวแทนจำหน่าย (Agent)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1">สถานะบัญชี</label>
-                <select
-                  value={editingUser.status}
-                  onChange={(e) => setEditingUser({ ...editingUser, status: e.target.value as any })}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#0b0e17] border-2 border-slate-700 text-xs text-white outline-none focus:border-amber-400 font-bold"
-                >
-                  <option value="active">เปิดใช้งาน (Active)</option>
-                  <option value="suspended">ระงับการใช้งานชั่วคราว (Suspended)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1">หมายเหตุแอดมิน</label>
-                <input
-                  type="text"
-                  value={editingUser.notes || ''}
-                  onChange={(e) => setEditingUser({ ...editingUser, notes: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#0b0e17] border-2 border-slate-700 text-xs text-white outline-none focus:border-amber-400"
-                />
               </div>
 
               <div className="pt-2 flex gap-3">
@@ -768,7 +743,7 @@ export const CustomerUserManager: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs"
+                  className="flex-1 py-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs shadow-lg shadow-amber-400/20"
                 >
                   บันทึกการแก้ไข
                 </button>

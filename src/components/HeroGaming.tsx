@@ -129,9 +129,6 @@ export const HeroGaming: React.FC<HeroGamingProps> = ({
                   <span className="font-extrabold text-sm text-white font-heading">
                     PROMO FLASH SALE
                   </span>
-                  <span className="px-2 py-0.5 rounded bg-fuchsia-500 text-white font-black text-[10px]">
-                    ลดสูงสุด 25%
-                  </span>
                 </div>
                 <p className="text-xs text-violet-200/80">
                   สต็อก eFootball, Last War, FC Mobile, Genshin, Call Of Duty วันนี้ ลดราคาพิเศษทุกแพ็กเกจ

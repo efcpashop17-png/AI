@@ -60,6 +60,15 @@ app.post("/api/verify-slip", async (req, res) => {
 });
 
 // Download Endpoint for backup
+app.get("/download-project.tar.gz", (req, res) => {
+  const filePath = path.join(__dirname, "public", "deploy.tar.gz");
+  if (fs.existsSync(filePath)) {
+    res.download(filePath, "efcpa-shop-latest.tar.gz");
+  } else {
+    res.status(404).send("File not found");
+  }
+});
+
 app.get("/download-project.zip", (req, res) => {
   const filePath = path.join(__dirname, "dist", "deploy.zip");
   if (fs.existsSync(filePath)) {
@@ -73,7 +82,19 @@ const distHtml = path.join(__dirname, "dist", "index.html");
 
 // Serve static frontend files from dist and public directories
 if (fs.existsSync(path.join(__dirname, "dist"))) {
-  app.use(express.static(path.join(__dirname, "dist")));
+  app.use(
+    express.static(path.join(__dirname, "dist"), {
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith("index.html")) {
+          res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+          res.setHeader("Pragma", "no-cache");
+          res.setHeader("Expires", "0");
+        } else if (filePath.includes("/assets/")) {
+          res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+        }
+      },
+    })
+  );
 }
 app.use(express.static(path.join(__dirname, "public")));
 app.use("/public", express.static(path.join(__dirname, "public")));
@@ -81,8 +102,11 @@ if (fs.existsSync(path.join(__dirname, "dist", "public"))) {
   app.use("/public", express.static(path.join(__dirname, "dist", "public")));
 }
 
-// Fallback to index.html for all SPA routes
+// Fallback to index.html for all SPA routes with no-cache headers
 app.get("*", (req, res) => {
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
   if (fs.existsSync(distHtml)) {
     res.sendFile(distHtml);
   } else if (fs.existsSync(path.join(__dirname, "index.html"))) {

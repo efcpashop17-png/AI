@@ -106,7 +106,7 @@ export const CartDrawer: React.FC = () => {
                 <div>
                   <h4 className="font-extrabold text-white text-lg font-heading">ตะกร้าของคุณยังว่างอยู่</h4>
                   <p className="text-xs text-violet-300/70 font-medium mt-1">
-                    เลือกเกมที่ต้องการเติม แล้วกด &quot;เพิ่มลงในตะกร้า&quot; ได้ตามต้องการ
+                    เลือกสินค้าที่ต้องการ แล้วกด &quot;เพิ่มลงในตะกร้า&quot; ได้ตามต้องการ
                   </p>
                 </div>
                 <button
@@ -117,7 +117,7 @@ export const CartDrawer: React.FC = () => {
                   className="neon-btn-purple px-6 py-3 rounded-2xl text-sm font-bold inline-flex items-center gap-2 cursor-pointer shadow-[0_0_20px_rgba(168,85,247,0.4)]"
                 >
                   <Zap className="w-4 h-4 fill-current" />
-                  <span>ไปเลือกเกมเติมเงิน</span>
+                  <span>ไปเลือกซื้อสินค้า</span>
                 </button>
               </div>
             ) : (

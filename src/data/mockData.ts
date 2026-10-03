@@ -102,6 +102,9 @@ export const DEFAULT_WEBHOOK_CONFIG: WebhookConfig = {
 export const INITIAL_TOPUP_ORDERS: TopUpOrder[] = [
   {
     id: 'GP-892410',
+    customerId: 'usr_001',
+    username: 'client_arm',
+    customerName: 'คุณอาร์ม ชัยพล (ลูกค้าราคาส่งประจำ)',
     gameId: 'efootball',
     gameName: 'eFootball',
     packageId: 'efb-pkg-3',
@@ -145,6 +148,9 @@ export const INITIAL_TOPUP_ORDERS: TopUpOrder[] = [
   },
   {
     id: 'GP-892398',
+    customerId: 'usr_002',
+    username: 'shop_pro_gamer',
+    customerName: 'ร้านโปรเกมเมอร์ ขอนแก่น',
     gameId: 'genshin',
     gameName: 'Genshin Impact',
     packageId: 'gi-pkg-1',
@@ -184,6 +190,9 @@ export const INITIAL_TOPUP_ORDERS: TopUpOrder[] = [
   },
   {
     id: 'GP-892385',
+    customerId: 'usr_003',
+    username: 'efootball_king_th',
+    customerName: 'กัปตันทีม eFootball Thailand',
     gameId: 'fcmobile',
     gameName: 'Fc Mobile',
     packageId: 'fc-pkg-2',
@@ -222,6 +231,9 @@ export const INITIAL_TOPUP_ORDERS: TopUpOrder[] = [
   },
   {
     id: 'GP-892370',
+    customerId: 'usr_001',
+    username: 'client_arm',
+    customerName: 'คุณอาร์ม ชัยพล (ลูกค้าราคาส่งประจำ)',
     gameId: 'lastwar',
     gameName: 'Last War',
     packageId: 'lw-pkg-2',
@@ -255,6 +267,9 @@ export const INITIAL_TOPUP_ORDERS: TopUpOrder[] = [
   },
   {
     id: 'GP-892350',
+    customerId: 'usr_002',
+    username: 'shop_pro_gamer',
+    customerName: 'ร้านโปรเกมเมอร์ ขอนแก่น',
     gameId: 'hsr',
     gameName: 'Honkai : Star Rail',
     packageId: 'hsr-pkg-3',
@@ -288,6 +303,9 @@ export const INITIAL_TOPUP_ORDERS: TopUpOrder[] = [
   },
   {
     id: 'GP-892320',
+    customerId: 'usr_001',
+    username: 'client_arm',
+    customerName: 'คุณอาร์ม ชัยพล (ลูกค้าราคาส่งประจำ)',
     gameId: 'wutheringwaves',
     gameName: 'Wuthering Waves',
     packageId: 'ww-pkg-1',

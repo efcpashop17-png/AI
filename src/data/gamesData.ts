@@ -14,6 +14,7 @@ export const INITIAL_GAMES: Game[] = [
     bannerGradient: 'from-blue-600/30 via-indigo-950/40 to-slate-950',
     iconUrl: 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=400&q=80',
     active: true,
+    todayRate: '฿45',
     accountField: {
       label: 'Konami ID / User ID (หรือ eFootball Owner ID)',
       placeholder: 'เช่น 123-456-789',

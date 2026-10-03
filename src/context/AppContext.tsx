@@ -22,6 +22,7 @@ import {
   INITIAL_CUSTOMER_USERS,
 } from '../data/mockData';
 import { pushOrderToGoogleSheets } from '../services/googleSheets';
+import { soundService } from '../services/soundService';
 
 interface AppContextType {
   games: Game[];
@@ -54,6 +55,8 @@ interface AppContextType {
   setIsAdminLoginModalOpen: (open: boolean) => void;
   setIsTopupModalOpen: (open: boolean) => void;
   setNotification: (notif: { type: 'success' | 'info' | 'error'; message: string } | null) => void;
+  soundEnabled: boolean;
+  toggleSound: () => void;
 
   // Cart Management
   addToCart: (itemData: {
@@ -151,6 +154,10 @@ interface AppContextType {
   ) => void;
   adminQuickSetPaid: (orderId: string, note?: string) => void;
   adminUploadSlip: (orderId: string, slipUrl: string) => void;
+  adminUploadDeliveryProof: (
+    orderId: string,
+    proofs: { preDeliveryImageUrl?: string; postDeliveryImageUrl?: string }
+  ) => void;
   attachSlipAndMarkPaid: (orderId: string, slipUrl: string) => void;
   resetAllData: () => void;
 
@@ -191,7 +198,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           if (filtered.length > 0) {
             return filtered.map((pg: Game) => {
               const initG = INITIAL_GAMES.find((ig) => ig.id === pg.id);
-              return initG ? { ...pg, thaiName: initG.thaiName, aliases: initG.aliases } : pg;
+              return initG
+                ? {
+                    ...pg,
+                    thaiName: initG.thaiName,
+                    aliases: initG.aliases,
+                    todayRate: pg.todayRate !== undefined ? pg.todayRate : initG.todayRate,
+                  }
+                : pg;
             });
           }
         }
@@ -327,10 +341,32 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const [isAdminLoginModalOpen, setIsAdminLoginModalOpen] = useState(false);
   const [isTopupModalOpen, setIsTopupModalOpen] = useState(false);
-  const [notification, setNotification] = useState<{
+  const [notification, setNotificationState] = useState<{
     type: 'success' | 'info' | 'error';
     message: string;
   } | null>(null);
+
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => !soundService.getIsMuted());
+
+  const toggleSound = () => {
+    const isNowMuted = soundService.toggleMute();
+    setSoundEnabled(!isNowMuted);
+    setNotificationState({
+      type: 'info',
+      message: !isNowMuted ? 'เปิดเสียงเอฟเฟกต์ (Sound ON)' : 'ปิดเสียงเอฟเฟกต์ (Muted)',
+    });
+  };
+
+  const setNotification = (notif: { type: 'success' | 'info' | 'error'; message: string } | null) => {
+    setNotificationState(notif);
+    if (notif) {
+      if (notif.type === 'error') {
+        soundService.playErrorSound();
+      } else {
+        soundService.playNotificationSound();
+      }
+    }
+  };
 
   // Sync to localStorage
   useEffect(() => {
@@ -559,6 +595,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       packageImageUrl: primaryItem.imageUrl,
       originalPrice: totalOriginalPrice,
       price: totalPrice,
+      customerId: currentCustomerUser ? currentCustomerUser.id : (isAdminLoggedIn ? 'admin' : undefined),
+      username: currentCustomerUser ? currentCustomerUser.username : (isAdminLoggedIn ? 'arm' : undefined),
+      customerName: currentCustomerUser ? (currentCustomerUser.customerName || currentCustomerUser.username) : (isAdminLoggedIn ? 'Admin Arm' : undefined),
       contactPhone,
       contactEmail,
       paymentMethod,
@@ -580,6 +619,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setIsCartOpen(false);
     setCurrentOrderForPayment(newOrder);
     setIsPaymentModalOpen(true);
+    soundService.playSuccessSound();
     pushOrderToGoogleSheets(newOrder).catch(() => null);
     return newOrder;
   };
@@ -668,6 +708,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       packageImageUrl: pkg.imageUrl,
       originalPrice: finalOriginalPrice,
       price: finalPrice,
+      customerId: currentCustomerUser ? currentCustomerUser.id : (isAdminLoggedIn ? 'admin' : undefined),
+      username: currentCustomerUser ? currentCustomerUser.username : (isAdminLoggedIn ? 'arm' : undefined),
+      customerName: currentCustomerUser ? (currentCustomerUser.customerName || currentCustomerUser.username) : (isAdminLoggedIn ? 'Admin Arm' : undefined),
       contactPhone: contactPhone || '-',
       contactEmail,
       paymentMethod,
@@ -687,6 +730,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setOrders((prev) => [newOrder, ...prev]);
     setCurrentOrderForPayment(newOrder);
     setIsPaymentModalOpen(true);
+    soundService.playSuccessSound();
     pushOrderToGoogleSheets(newOrder).catch(() => null);
     return newOrder;
   };
@@ -749,6 +793,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       })
     );
 
+    soundService.playSuccessSound();
+
     setNotification({
       type: 'success',
       message: 'แนบสลิปสำเร็จ! ระบบอัปเดตสถานะเป็น "ชำระเงินแล้ว" ทันที พร้อมเตรียมจัดส่งสต็อก',
@@ -759,6 +805,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const confirmPayment = (orderId: string, slipUrl?: string) => {
     const now = new Date();
     const timeStr = now.toLocaleTimeString('th-TH');
+
+    soundService.playSuccessSound();
 
     setOrders((prev) =>
       prev.map((order) => {
@@ -796,6 +844,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     // Simulate fast automated stock delivery
     setTimeout(() => {
+      soundService.playStatusUpdateSound();
       setOrders((prev) =>
         prev.map((ord) => {
           if (ord.id !== orderId) return ord;
@@ -819,6 +868,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }, 1600);
 
     setTimeout(() => {
+      soundService.playSuccessSound();
       setOrders((prev) => {
         const completeTime = new Date().toLocaleTimeString('th-TH');
         const updated = prev.map((ord) => {
@@ -1282,6 +1332,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return updatedOrd;
       })
     );
+    soundService.playStatusUpdateSound();
     const finalLabel = newStatus === 'custom' ? (customStatusText || 'อื่นๆ') : (statusLabels[newStatus] || newStatus);
     setNotification({
       type: 'success',
@@ -1481,6 +1532,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         };
       })
     );
+    soundService.playSuccessSound();
     setNotification({
       type: 'success',
       message: `ปรับสถานะคำสั่งซื้อ ${orderId} เป็น "ชำระเงินแล้ว" เรียบร้อย`,
@@ -1514,9 +1566,63 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         };
       })
     );
+    soundService.playSuccessSound();
     setNotification({
       type: 'success',
       message: `แนบสลิปและปรับสถานะเป็น "ชำระเงินแล้ว" ให้กับ ${orderId} สำเร็จ`,
+    });
+  };
+
+  // แอดมินอัปโหลดและเชื่อมโยงภาพหลักฐานการจัดส่งสินค้า (ภาพก่อนส่ง และ ภาพหลังส่ง)
+  const adminUploadDeliveryProof = (
+    orderId: string,
+    proofs: { preDeliveryImageUrl?: string; postDeliveryImageUrl?: string }
+  ) => {
+    const timeStr = new Date().toLocaleTimeString('th-TH');
+    const nowIso = new Date().toISOString();
+    soundService.playStatusUpdateSound();
+    setOrders((prev) =>
+      prev.map((ord) => {
+        if (ord.id !== orderId) return ord;
+        const updatedOrd: TopUpOrder = {
+          ...ord,
+          preDeliveryImageUrl:
+            proofs.preDeliveryImageUrl !== undefined
+              ? proofs.preDeliveryImageUrl
+              : ord.preDeliveryImageUrl,
+          postDeliveryImageUrl:
+            proofs.postDeliveryImageUrl !== undefined
+              ? proofs.postDeliveryImageUrl
+              : ord.postDeliveryImageUrl,
+          deliveryProofUploadedAt: nowIso,
+          deliveredBy: 'แอดมิน',
+          updatedAt: nowIso,
+        };
+
+        const hasProofTimeline = updatedOrd.timeline.some((t) =>
+          t.description.includes('หลักฐานการจัดส่ง')
+        );
+        if (
+          !hasProofTimeline &&
+          (proofs.preDeliveryImageUrl || proofs.postDeliveryImageUrl)
+        ) {
+          updatedOrd.timeline = [
+            ...updatedOrd.timeline,
+            {
+              id: `step_${Date.now()}_proof`,
+              status: updatedOrd.status,
+              time: timeStr,
+              description: `📸 แอดมินได้แนบภาพหลักฐานการจัดส่งสินค้า (ก่อนส่ง / หลังส่ง) เรียบร้อยแล้ว`,
+              actor: 'admin',
+            },
+          ];
+        }
+        return updatedOrd;
+      })
+    );
+    setNotification({
+      type: 'success',
+      message: `บันทึกรูปภาพหลักฐานการจัดส่งสำหรับ ${orderId} สำเร็จแล้ว`,
     });
   };
 
@@ -1604,6 +1710,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         adminUpdateTimelineStep,
         adminQuickSetPaid,
         adminUploadSlip,
+        adminUploadDeliveryProof,
         attachSlipAndMarkPaid,
         resetAllData,
         customerUsers,
@@ -1614,6 +1721,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         adjustCustomerBalance,
         customerLogin,
         customerLogout,
+        soundEnabled,
+        toggleSound,
       }}
     >
       {children}

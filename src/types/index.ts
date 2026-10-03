@@ -47,6 +47,7 @@ export interface Game {
   iconUrl?: string;
   bannerGradient: string;
   imageVersions?: GameImageVersion[];
+  todayRate?: string; // เรทของวันนี้ เช่น "฿45", "เรท 0.85", "0.85" (แอดมินปรับแก้ได้หลังบ้าน)
 }
 
 export interface CartItem {
@@ -104,6 +105,8 @@ export interface TopUpOrder {
   packageImageUrl?: string;
   originalPrice: number;
   price: number;
+  customerId?: string;
+  username?: string;
   customerName?: string;
   contactEmail?: string;
   contactPhone: string;
@@ -114,6 +117,10 @@ export interface TopUpOrder {
   status: TopUpStatus;
   customStatus?: string;      // ข้อความสถานะที่แอดมินกำหนดเอง
   adminNote?: string;         // ข้อความที่แอดมินพิมพ์ส่งตรงถึงลูกค้า
+  preDeliveryImageUrl?: string;   // รูปที่ 1: ภาพหลักฐานจำนวนของก่อนส่ง (Pre-delivery)
+  postDeliveryImageUrl?: string;  // รูปที่ 2: ภาพหลักฐานจำนวนของหลังส่ง (Post-delivery)
+  deliveryProofUploadedAt?: string; // วันเวลาที่แอดมินอัปโหลดหลักฐานส่งของ
+  deliveredBy?: string;           // ผู้จัดส่ง (เช่น "แอดมิน")
   timeline: TopUpTimeline[];
   createdAt: string;
   updatedAt: string;
@@ -153,6 +160,7 @@ export interface CustomerUser {
   username: string;
   password: string;
   customerName: string;
+  contactChannel?: string;  // ช่องทางติดต่อ (LINE ID, เบอร์, FB) - เฉพาะแอดมินเห็นได้คนเดียว
   contactPhone: string;
   contactEmail?: string;
   role: 'wholesale_customer' | 'vip_dealer' | 'agent';

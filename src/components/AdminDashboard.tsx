@@ -42,6 +42,7 @@ import {
   ExternalLink,
   MessageSquare,
   Star,
+  Camera,
 } from 'lucide-react';
 import { Game, GamePackage, TopUpStatus, TopUpOrder, Dealer, WebhookConfig } from '../types';
 import { DealerAnalyticsDashboard } from './DealerAnalyticsDashboard';
@@ -85,8 +86,11 @@ export const AdminDashboard: React.FC = () => {
     adminUpdateTimelineStep,
     adminQuickSetPaid,
     adminUploadSlip,
+    adminUploadDeliveryProof,
     resetAllData,
     setNotification,
+    setIsAdminLoginModalOpen,
+    setActiveTab,
   } = useApp();
 
   // Login form state for lock screen
@@ -147,8 +151,12 @@ export const AdminDashboard: React.FC = () => {
   const [newGamePublisher, setNewGamePublisher] = useState('');
   const [newGameCategory, setNewGameCategory] = useState<'MOBA' | 'Battle Royale' | 'RPG' | 'FPS' | 'Casual' | 'Sports'>('MOBA');
   const [newGameDesc, setNewGameDesc] = useState('');
+  const [newGameTodayRate, setNewGameTodayRate] = useState('');
   const [newGameAccountLabel, setNewGameAccountLabel] = useState('Player ID / UID');
   const [newGameAccountPlaceholder, setNewGameAccountPlaceholder] = useState('เช่น 12345678');
+
+  // Today's Rate Inputs for games
+  const [todayRateInputs, setTodayRateInputs] = useState<Record<string, string>>({});
 
   // Change Admin Passcode State
   const [newAdminPasscode, setNewAdminPasscode] = useState('');
@@ -165,6 +173,66 @@ export const AdminDashboard: React.FC = () => {
   const [editingTimelineDesc, setEditingTimelineDesc] = useState('');
   const [viewingAdminSlipUrl, setViewingAdminSlipUrl] = useState<string | null>(null);
   const adminSlipFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Delivery Proof Images State (Pre-delivery & Post-delivery)
+  const [deliveryProofModalOrder, setDeliveryProofModalOrder] = useState<TopUpOrder | null>(null);
+  const [preDeliveryImg, setPreDeliveryImg] = useState<string>('');
+  const [postDeliveryImg, setPostDeliveryImg] = useState<string>('');
+  const [viewingProofFullscreen, setViewingProofFullscreen] = useState<{ url: string; title: string } | null>(null);
+  const preDeliveryFileInputRef = useRef<HTMLInputElement>(null);
+  const postDeliveryFileInputRef = useRef<HTMLInputElement>(null);
+
+  const openDeliveryProofModal = (ord: TopUpOrder) => {
+    setDeliveryProofModalOrder(ord);
+    setPreDeliveryImg(ord.preDeliveryImageUrl || '');
+    setPostDeliveryImg(ord.postDeliveryImageUrl || '');
+  };
+
+  const handlePreDeliveryFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      setNotification({ type: 'error', message: 'ขนาดไฟล์ภาพเกิน 10MB' });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const res = ev.target?.result as string;
+      if (res) setPreDeliveryImg(res);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handlePostDeliveryFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      setNotification({ type: 'error', message: 'ขนาดไฟล์ภาพเกิน 10MB' });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const res = ev.target?.result as string;
+      if (res) setPostDeliveryImg(res);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveDeliveryProof = (markCompleted: boolean = false) => {
+    if (!deliveryProofModalOrder) return;
+    adminUploadDeliveryProof(deliveryProofModalOrder.id, {
+      preDeliveryImageUrl: preDeliveryImg,
+      postDeliveryImageUrl: postDeliveryImg,
+    });
+    if (markCompleted && deliveryProofModalOrder.status !== 'completed') {
+      adminUpdateOrderStatus(
+        deliveryProofModalOrder.id,
+        'completed',
+        'ส่งสำเร็จเเล้ว (แนบภาพหลักฐานจัดส่งเรียบร้อย)'
+      );
+    }
+    setDeliveryProofModalOrder(null);
+  };
 
   // Keep selectedOrderForProgress updated live with orders list
   const activeProgressOrder =
@@ -201,68 +269,44 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
-  // IF NOT LOGGED IN AS ADMIN: STRICT ACCESS DENIED LOCK SCREEN
+  // IF NOT LOGGED IN AS ADMIN: STRICT ACCESS DENIED
   if (!isAdminLoggedIn) {
-    const handleLoginSubmit = (e: React.FormEvent) => {
-      e.preventDefault();
-      adminLogin(loginUsername, loginPasscode);
-    };
-
     return (
-      <div className="max-w-md mx-auto my-16 px-4">
-        <div className="rounded-3xl bg-[#131826] border-2 border-slate-700 p-7 sm:p-8 shadow-2xl shadow-black text-white text-center">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-600 mx-auto flex items-center justify-center shadow-lg shadow-amber-500/30 mb-4 border border-amber-300">
-            <Lock className="w-8 h-8 text-slate-950 stroke-[2.5]" />
+      <div className="max-w-md mx-auto my-16 px-4 animate-fadeIn">
+        <div className="rounded-3xl bg-[#120E24] border border-violet-500/30 p-7 sm:p-8 shadow-2xl text-white text-center">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-600 via-fuchsia-600 to-cyan-500 mx-auto flex items-center justify-center shadow-lg shadow-violet-600/30 mb-4 border border-violet-400/40">
+            <Lock className="w-8 h-8 text-white stroke-[2.5]" />
           </div>
 
-          <span className="text-[11px] font-black tracking-widest uppercase px-3 py-1 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/50 inline-block mb-2">
+          <span className="text-[11px] font-black tracking-widest uppercase px-3 py-1 rounded-full bg-violet-950 text-cyan-300 border border-violet-500/40 inline-block mb-2">
             RESTRICTED ACCESS
           </span>
 
-          <h2 className="text-2xl font-black text-white font-display">
+          <h2 className="text-2xl font-black text-white font-heading">
             ระบบจัดการหลังบ้าน (แอดมิน)
           </h2>
-          <p className="text-xs text-slate-300 mt-1 mb-6 leading-relaxed font-semibold">
-            🔒 เฉพาะผู้ดูแลระบบคนเดียวเท่านั้นที่ได้รับอนุญาตให้เข้าถึงระบบจัดการราคาและคำสั่งซื้อ
+          <p className="text-xs text-violet-200/80 mt-1 mb-6 leading-relaxed font-medium">
+            🔒 เฉพาะผู้ดูแลระบบที่มีสิทธิ์เท่านั้น เมื่อล็อกอินด้วยบัญชีที่เป็นแอดมิน ข้อมูลหลังบ้านจะแสดงขึ้นมาโดยอัตโนมัติ
           </p>
 
-          <form onSubmit={handleLoginSubmit} className="space-y-4 text-left">
-            <div>
-              <label className="block text-xs font-bold text-slate-200 mb-1.5">
-                ชื่อผู้ใช้แอดมิน (Username)
-              </label>
-              <input
-                type="text"
-                required
-                value={loginUsername}
-                onChange={(e) => setLoginUsername(e.target.value)}
-                placeholder="admin"
-                className="w-full px-4 py-3 rounded-xl bg-[#0b0e17] border-2 border-slate-700 focus:border-amber-400 text-white font-bold text-sm outline-none transition-colors"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-200 mb-1.5">
-                รหัสผ่านแอดมิน (Passcode)
-              </label>
-              <input
-                type="password"
-                required
-                value={loginPasscode}
-                onChange={(e) => setLoginPasscode(e.target.value)}
-                placeholder="กรอกรหัสผ่านแอดมิน"
-                className="w-full px-4 py-3 rounded-xl bg-[#0b0e17] border-2 border-slate-700 focus:border-amber-400 text-white font-bold text-sm outline-none font-mono transition-colors"
-              />
-            </div>
-
+          <div className="space-y-3">
             <button
-              type="submit"
-              className="w-full py-3.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-sm border-2 border-amber-300 shadow-lg shadow-amber-400/25 transition-all flex items-center justify-center gap-2 cursor-pointer mt-2"
+              type="button"
+              onClick={() => setIsAdminLoginModalOpen(true)}
+              className="w-full py-3.5 rounded-2xl neon-btn-purple text-white font-black text-sm shadow-lg flex items-center justify-center gap-2 cursor-pointer transition-all hover:scale-[1.02]"
             >
               <KeyRound className="w-4 h-4 stroke-[2.5]" />
-              <span>เข้าสู่ระบบหลังบ้าน</span>
+              <span>เข้าสู่ระบบด้วยบัญชีแอดมิน</span>
             </button>
-          </form>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('store')}
+              className="w-full py-3 rounded-2xl bg-[#0B0813] hover:bg-[#1B1433] text-violet-300 hover:text-white font-bold text-xs border border-violet-500/30 transition-colors cursor-pointer"
+            >
+              กลับไปหน้าแรก (หน้าร้านค้า)
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -378,6 +422,7 @@ export const AdminDashboard: React.FC = () => {
       publisher: newGamePublisher.trim() || 'Independent',
       category: newGameCategory,
       description: newGameDesc.trim() || 'บริการเติมเงินเกมออนไลน์ระบบอัตโนมัติ รวดเร็ว ปลอดภัย',
+      todayRate: newGameTodayRate.trim() || undefined,
       badge: '✨ เกมใหม่',
       active: true,
       bannerGradient: 'from-violet-600/30 via-purple-950/40 to-slate-950',
@@ -404,6 +449,7 @@ export const AdminDashboard: React.FC = () => {
     setNewGameName('');
     setNewGamePublisher('');
     setNewGameDesc('');
+    setNewGameTodayRate('');
   };
 
   // Export Orders to CSV for Accounting Needs (Requested by user)
@@ -906,7 +952,7 @@ export const AdminDashboard: React.FC = () => {
           {/* Current Game Packages Table - Solid */}
           {currentGame && (
             <div className="rounded-3xl bg-[#141928] border-2 border-slate-700 overflow-hidden shadow-xl">
-              <div className="p-5 bg-[#1b2234] border-b-2 border-slate-700 flex items-center justify-between">
+              <div className="p-5 bg-[#1b2234] border-b-2 border-slate-700 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                 <div>
                   <h3 className="text-lg font-black text-white flex items-center gap-2">
                     <span>ตารางแพ็กเกจ: {currentGame.name}</span>
@@ -917,6 +963,52 @@ export const AdminDashboard: React.FC = () => {
                   <p className="text-xs text-slate-300 font-semibold mt-0.5">
                     คลิกปุ่ม &quot;แก้ไขราคา&quot; เพื่อปรับราคาขายโปรโมชั่น หรือราคาเต็มได้ตลอดเวลา
                   </p>
+                </div>
+
+                {/* Adjust Today's Rate for this game */}
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-3 rounded-2xl bg-[#0b0e17] border-2 border-amber-400/50 shadow-inner">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-amber-400/20 text-amber-400 flex items-center justify-center font-bold shrink-0">
+                      <TrendingUp className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="text-xs font-black text-amber-300 block">
+                        เรทของวันนี้ (แสดงหน้าร้าน)
+                      </span>
+                      <span className="text-[10px] text-slate-400">
+                        ปัจจุบัน: <strong className="text-white font-mono">{currentGame.todayRate || `฿${(currentGame.packages.length > 0 ? Math.min(...currentGame.packages.map(p => p.price)) : 0).toLocaleString()} (อิงราคาแพ็ก)`}</strong>
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <input
+                      type="text"
+                      value={todayRateInputs[currentGame.id] !== undefined ? todayRateInputs[currentGame.id] : (currentGame.todayRate || '')}
+                      onChange={(e) =>
+                        setTodayRateInputs((prev) => ({
+                          ...prev,
+                          [currentGame.id]: e.target.value,
+                        }))
+                      }
+                      placeholder={`เช่น ฿${currentGame.packages.length > 0 ? Math.min(...currentGame.packages.map(p => p.price)) : 45} หรือ เรท 0.85`}
+                      className="px-3 py-1.5 rounded-xl bg-[#141928] border border-slate-700 text-xs text-white font-mono outline-none focus:border-amber-400 w-full sm:w-44 font-bold"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const val = (todayRateInputs[currentGame.id] !== undefined ? todayRateInputs[currentGame.id] : (currentGame.todayRate || '')).trim();
+                        updateGame(currentGame.id, { todayRate: val });
+                        setNotification({
+                          type: 'success',
+                          message: `อัปเดตเรทของวันนี้สำหรับ ${currentGame.name} เป็น "${val || 'ค่าเริ่มต้น'}" สำเร็จ`,
+                        });
+                      }}
+                      className="px-3.5 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs shrink-0 cursor-pointer shadow-md transition-all hover:scale-105"
+                    >
+                      บันทึกเรท
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -1194,6 +1286,30 @@ export const AdminDashboard: React.FC = () => {
                           )}
                         </td>
                         <td className="py-3.5 px-4 text-right space-x-1.5 whitespace-nowrap">
+                          {/* Delivery Proof Button (Pre & Post Delivery Images) */}
+                          <button
+                            type="button"
+                            onClick={() => openDeliveryProofModal(ord)}
+                            className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-all inline-flex items-center gap-1.5 cursor-pointer ${
+                              ord.preDeliveryImageUrl && ord.postDeliveryImageUrl
+                                ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/60 hover:bg-emerald-900 shadow-[0_0_10px_rgba(16,185,129,0.3)]'
+                                : ord.preDeliveryImageUrl || ord.postDeliveryImageUrl
+                                ? 'bg-amber-950/80 text-amber-300 border-amber-500/60 hover:bg-amber-900'
+                                : 'bg-[#1b2234] hover:bg-[#25304a] text-cyan-300 border-slate-700'
+                            }`}
+                            title="อัปโหลดภาพหลักฐานการจัดส่งสินค้า (ภาพก่อนส่ง & ภาพหลังส่ง) ให้ลูกค้าดู"
+                          >
+                            <Camera className="w-3.5 h-3.5" />
+                            <span>
+                              หลักฐานจัดส่ง{' '}
+                              {ord.preDeliveryImageUrl && ord.postDeliveryImageUrl
+                                ? '✓ 2/2'
+                                : ord.preDeliveryImageUrl || ord.postDeliveryImageUrl
+                                ? '1/2'
+                                : '+ แนบภาพ'}
+                            </span>
+                          </button>
+
                           {/* Quick Set Status to ส่งสำเร็จเเล้ว */}
                           {ord.status !== 'completed' && (
                             <button
@@ -1322,6 +1438,29 @@ export const AdminDashboard: React.FC = () => {
                 </div>
 
                 <p className="text-xs text-slate-300 line-clamp-2">{game.description}</p>
+
+                {/* Today's Rate Display & Quick Edit */}
+                <div className="p-2.5 rounded-xl bg-[#0b0e17] border border-amber-500/30 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 text-xs text-amber-300 font-bold">
+                    <TrendingUp className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <span>เรทวันนี้:</span>
+                    <span className="font-mono text-white font-extrabold ml-1">
+                      {game.todayRate || `฿${(game.packages.length > 0 ? Math.min(...game.packages.map(p => p.price)) : 0).toLocaleString()} (อิงราคาแพ็ก)`}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newRate = prompt(`ระบุเรทของวันนี้สำหรับ ${game.name} (เช่น ฿45 หรือ เรท 0.85):`, game.todayRate || '');
+                      if (newRate !== null) {
+                        updateGame(game.id, { todayRate: newRate.trim() });
+                      }
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-[11px] shrink-0 cursor-pointer shadow transition-all hover:scale-105"
+                  >
+                    ปรับเรท
+                  </button>
+                </div>
 
                 <div className="pt-2 border-t border-purple-900/50 flex items-center justify-between">
                   <span className="text-xs text-purple-400">
@@ -2398,6 +2537,20 @@ export const AdminDashboard: React.FC = () => {
                 </div>
               </div>
 
+              <div>
+                <label className="block text-xs font-semibold text-amber-300 mb-1 flex items-center gap-1.5">
+                  <TrendingUp className="w-3.5 h-3.5 text-amber-400" />
+                  <span>เรทของวันนี้ (แสดงที่การ์ดเกมหน้าร้าน)</span>
+                </label>
+                <input
+                  type="text"
+                  value={newGameTodayRate}
+                  onChange={(e) => setNewGameTodayRate(e.target.value)}
+                  placeholder="เช่น ฿45 หรือ เรท 0.85 (เว้นว่างไว้จะอิงราคาแพ็กเกจต่ำสุด)"
+                  className="w-full px-3.5 py-2 rounded-xl bg-purple-950/80 border border-amber-500/40 text-white text-sm outline-none font-mono focus:border-amber-400"
+                />
+              </div>
+
               <div className="pt-3 border-t border-purple-800/40 flex gap-2">
                 <button
                   type="button"
@@ -2655,6 +2808,72 @@ export const AdminDashboard: React.FC = () => {
               )}
             </div>
 
+            {/* SECTION: PROOF OF DELIVERY (ภาพหลักฐานก่อนส่ง & หลังส่ง) */}
+            <div className="mb-6 p-4 rounded-2xl bg-[#1b2234] border-2 border-slate-700 space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-black text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Camera className="w-4 h-4 text-cyan-400" />
+                  <span>ภาพหลักฐานการจัดส่งสินค้า (ก่อนส่ง & หลังส่ง)</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => openDeliveryProofModal(activeProgressOrder)}
+                  className="px-3 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-black text-xs flex items-center gap-1.5 cursor-pointer shadow transition-all"
+                >
+                  <Camera className="w-3.5 h-3.5" />
+                  <span>อัปโหลด / แก้ไขภาพหลักฐาน</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Pre-delivery preview */}
+                <div className="p-3 rounded-xl bg-[#0b0e17] border border-slate-700 flex items-center gap-3">
+                  {activeProgressOrder.preDeliveryImageUrl ? (
+                    <div
+                      onClick={() => setViewingAdminSlipUrl(activeProgressOrder.preDeliveryImageUrl || null)}
+                      className="w-14 h-14 rounded-lg overflow-hidden bg-black border border-amber-400/50 cursor-pointer shrink-0 shadow-sm"
+                      title="คลิกเพื่อดูขยาย"
+                    >
+                      <img src={activeProgressOrder.preDeliveryImageUrl} alt="ก่อนส่ง" className="w-full h-full object-cover" />
+                    </div>
+                  ) : (
+                    <div className="w-14 h-14 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-500 text-[10px] text-center font-bold shrink-0">
+                      ไม่มีรูป
+                    </div>
+                  )}
+                  <div>
+                    <span className="text-xs font-bold text-white block">1. ภาพก่อนส่ง (Pre-delivery)</span>
+                    <span className="text-[11px] text-slate-400">
+                      {activeProgressOrder.preDeliveryImageUrl ? '✅ แนบรูปแล้ว' : 'ยังไม่ได้แนบ'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Post-delivery preview */}
+                <div className="p-3 rounded-xl bg-[#0b0e17] border border-slate-700 flex items-center gap-3">
+                  {activeProgressOrder.postDeliveryImageUrl ? (
+                    <div
+                      onClick={() => setViewingAdminSlipUrl(activeProgressOrder.postDeliveryImageUrl || null)}
+                      className="w-14 h-14 rounded-lg overflow-hidden bg-black border border-cyan-400/50 cursor-pointer shrink-0 shadow-sm"
+                      title="คลิกเพื่อดูขยาย"
+                    >
+                      <img src={activeProgressOrder.postDeliveryImageUrl} alt="หลังส่ง" className="w-full h-full object-cover" />
+                    </div>
+                  ) : (
+                    <div className="w-14 h-14 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-500 text-[10px] text-center font-bold shrink-0">
+                      ไม่มีรูป
+                    </div>
+                  )}
+                  <div>
+                    <span className="text-xs font-bold text-white block">2. ภาพหลังส่ง (Post-delivery)</span>
+                    <span className="text-[11px] text-slate-400">
+                      {activeProgressOrder.postDeliveryImageUrl ? '✅ แนบรูปแล้ว' : 'ยังไม่ได้แนบ'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* SECTION 3: LIVE TIMELINE STEPS MANAGEMENT (บันทึกความคืบหน้าระบบอัตโนมัติ) */}
             <div className="mb-6 p-4 rounded-2xl bg-[#1b2234] border-2 border-slate-700 space-y-3">
               <div className="flex items-center justify-between">
@@ -2902,6 +3121,285 @@ export const AdminDashboard: React.FC = () => {
                 type="button"
                 onClick={() => setViewingAdminSlipUrl(null)}
                 className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs cursor-pointer"
+              >
+                ปิดหน้าต่าง
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DELIVERY PROOF MANAGEMENT MODAL (PRE-DELIVERY & POST-DELIVERY) */}
+      {deliveryProofModalOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn overflow-y-auto">
+          <div className="relative max-w-3xl w-full bg-[#131826] border-2 border-slate-700 rounded-3xl p-6 sm:p-7 shadow-2xl my-8">
+            <button
+              type="button"
+              onClick={() => setDeliveryProofModalOrder(null)}
+              className="absolute top-5 right-5 p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+            >
+              <XCircle className="w-6 h-6" />
+            </button>
+
+            {/* Header */}
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-500 to-violet-600 flex items-center justify-center text-white shadow-lg shadow-cyan-500/20">
+                <Camera className="w-6 h-6 stroke-[2.5]" />
+              </div>
+              <div>
+                <span className="text-[11px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-500/40 inline-block mb-1">
+                  PROOF OF DELIVERY (หลักฐานการจัดส่ง)
+                </span>
+                <h3 className="text-xl sm:text-2xl font-black text-white font-display">
+                  อัปโหลดหลักฐานการจัดส่งสินค้า (ก่อนส่ง & หลังส่ง)
+                </h3>
+                <p className="text-xs text-slate-300 mt-0.5 font-medium">
+                  คำสั่งซื้อ: <span className="font-mono text-amber-400 font-bold">{deliveryProofModalOrder.id}</span> | {deliveryProofModalOrder.gameName} ({deliveryProofModalOrder.packageName}) | UID: <span className="font-mono text-emerald-400 font-bold">{deliveryProofModalOrder.playerUid}</span>
+                </p>
+              </div>
+            </div>
+
+            {/* Hidden file inputs */}
+            <input
+              type="file"
+              ref={preDeliveryFileInputRef}
+              onChange={handlePreDeliveryFileUpload}
+              accept="image/*"
+              className="hidden"
+            />
+            <input
+              type="file"
+              ref={postDeliveryFileInputRef}
+              onChange={handlePostDeliveryFileUpload}
+              accept="image/*"
+              className="hidden"
+            />
+
+            {/* 2 Column Image Upload Slots */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+              {/* SLOT 1: PRE-DELIVERY */}
+              <div className="p-4 rounded-2xl bg-[#0b0e17] border-2 border-slate-700/80 flex flex-col justify-between space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <Camera className="w-3.5 h-3.5 text-amber-400" />
+                    <span>1. ภาพจำนวนของก่อนส่ง (Pre-delivery)</span>
+                  </span>
+                  {preDeliveryImg ? (
+                    <span className="text-[11px] font-bold text-emerald-400 flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> แนบแล้ว
+                    </span>
+                  ) : (
+                    <span className="text-[11px] font-bold text-slate-400">ยังไม่แนบ</span>
+                  )}
+                </div>
+
+                {preDeliveryImg ? (
+                  <div className="space-y-3">
+                    <div
+                      onClick={() => setViewingProofFullscreen({ url: preDeliveryImg, title: `ภาพก่อนส่ง (Pre-delivery) - ออเดอร์ ${deliveryProofModalOrder.id}` })}
+                      className="relative w-full h-48 rounded-xl overflow-hidden bg-black border border-amber-400/40 cursor-pointer group shadow-inner flex items-center justify-center"
+                    >
+                      <img
+                        src={preDeliveryImg}
+                        alt="ภาพก่อนส่ง"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                      />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-2 transition-opacity">
+                        <Eye className="w-6 h-6 text-white" />
+                        <span className="text-xs font-bold text-white">คลิกเพื่อดูขยาย</span>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => preDeliveryFileInputRef.current?.click()}
+                        className="flex-1 py-2 rounded-xl bg-[#1e273d] hover:bg-[#283552] text-xs font-bold text-cyan-300 border border-slate-600 flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>เปลี่ยนรูปก่อนส่ง</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPreDeliveryImg('')}
+                        className="px-3 py-2 rounded-xl bg-rose-950/60 hover:bg-rose-900 text-xs font-bold text-rose-300 border border-rose-600/40 cursor-pointer"
+                        title="ลบรูป"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div
+                      onClick={() => preDeliveryFileInputRef.current?.click()}
+                      className="w-full h-48 rounded-xl border-2 border-dashed border-slate-700 hover:border-amber-400/60 bg-[#121624] flex flex-col items-center justify-center p-4 cursor-pointer transition-colors group"
+                    >
+                      <Upload className="w-8 h-8 text-slate-500 group-hover:text-amber-400 mb-2 transition-colors" />
+                      <span className="text-xs font-bold text-slate-300 group-hover:text-white">
+                        คลิกเพื่ออัปโหลดภาพก่อนส่ง
+                      </span>
+                      <span className="text-[11px] text-slate-500 mt-0.5">
+                        รองรับไฟล์ JPG, PNG (เช่น แคปภาพเหรียญเดิมก่อนเติม)
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const samplePre = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"><rect width="400" height="300" fill="%230f172a"/><text x="200" y="50" fill="%23f59e0b" font-size="20" font-family="sans-serif" font-weight="bold" text-anchor="middle">ภาพก่อนส่ง (Pre-delivery)</text><text x="200" y="90" fill="%2394a3b8" font-size="14" font-family="sans-serif" text-anchor="middle">UID: ${deliveryProofModalOrder.playerUid}</text><rect x="50" y="130" width="300" height="80" rx="12" fill="%231e293b" stroke="%23334155"/><text x="200" y="175" fill="%23ffffff" font-size="18" font-family="sans-serif" font-weight="bold" text-anchor="middle">ยอดเหรียญเดิม: 0 เหรียญ</text><text x="200" y="260" fill="%2364748b" font-size="12" font-family="sans-serif" text-anchor="middle">${deliveryProofModalOrder.gameName}</text></svg>`;
+                        setPreDeliveryImg(samplePre);
+                      }}
+                      className="w-full py-1.5 rounded-lg bg-[#1e273d] hover:bg-[#283552] text-slate-400 hover:text-slate-200 text-xs font-medium border border-slate-700 cursor-pointer"
+                    >
+                      + ใช้รูปตัวอย่างก่อนส่ง
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* SLOT 2: POST-DELIVERY */}
+              <div className="p-4 rounded-2xl bg-[#0b0e17] border-2 border-slate-700/80 flex flex-col justify-between space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <Camera className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>2. ภาพจำนวนของหลังส่ง (Post-delivery)</span>
+                  </span>
+                  {postDeliveryImg ? (
+                    <span className="text-[11px] font-bold text-emerald-400 flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> แนบแล้ว
+                    </span>
+                  ) : (
+                    <span className="text-[11px] font-bold text-slate-400">ยังไม่แนบ</span>
+                  )}
+                </div>
+
+                {postDeliveryImg ? (
+                  <div className="space-y-3">
+                    <div
+                      onClick={() => setViewingProofFullscreen({ url: postDeliveryImg, title: `ภาพหลังส่ง (Post-delivery) - ออเดอร์ ${deliveryProofModalOrder.id}` })}
+                      className="relative w-full h-48 rounded-xl overflow-hidden bg-black border border-cyan-400/40 cursor-pointer group shadow-inner flex items-center justify-center"
+                    >
+                      <img
+                        src={postDeliveryImg}
+                        alt="ภาพหลังส่ง"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                      />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-2 transition-opacity">
+                        <Eye className="w-6 h-6 text-white" />
+                        <span className="text-xs font-bold text-white">คลิกเพื่อดูขยาย</span>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => postDeliveryFileInputRef.current?.click()}
+                        className="flex-1 py-2 rounded-xl bg-[#1e273d] hover:bg-[#283552] text-xs font-bold text-cyan-300 border border-slate-600 flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>เปลี่ยนรูปหลังส่ง</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPostDeliveryImg('')}
+                        className="px-3 py-2 rounded-xl bg-rose-950/60 hover:bg-rose-900 text-xs font-bold text-rose-300 border border-rose-600/40 cursor-pointer"
+                        title="ลบรูป"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div
+                      onClick={() => postDeliveryFileInputRef.current?.click()}
+                      className="w-full h-48 rounded-xl border-2 border-dashed border-slate-700 hover:border-cyan-400/60 bg-[#121624] flex flex-col items-center justify-center p-4 cursor-pointer transition-colors group"
+                    >
+                      <Upload className="w-8 h-8 text-slate-500 group-hover:text-cyan-400 mb-2 transition-colors" />
+                      <span className="text-xs font-bold text-slate-300 group-hover:text-white">
+                        คลิกเพื่ออัปโหลดภาพหลังส่ง
+                      </span>
+                      <span className="text-[11px] text-slate-500 mt-0.5">
+                        รองรับไฟล์ JPG, PNG (เช่น แคปภาพเหรียญหลังส่งมอบ)
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const samplePost = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"><rect width="400" height="300" fill="%23064e3b"/><text x="200" y="50" fill="%2334d399" font-size="20" font-family="sans-serif" font-weight="bold" text-anchor="middle">ภาพหลังส่ง (Post-delivery)</text><text x="200" y="90" fill="%23a7f3d0" font-size="14" font-family="sans-serif" text-anchor="middle">UID: ${deliveryProofModalOrder.playerUid}</text><rect x="50" y="130" width="300" height="80" rx="12" fill="%23022c22" stroke="%23059669"/><text x="200" y="175" fill="%23ffffff" font-size="18" font-family="sans-serif" font-weight="bold" text-anchor="middle">ยอดเหรียญใหม่: +${deliveryProofModalOrder.itemAmount.toLocaleString()} เหรียญ สำเร็จ!</text><text x="200" y="260" fill="%236ee7b7" font-size="12" font-family="sans-serif" text-anchor="middle">${deliveryProofModalOrder.packageName}</text></svg>`;
+                        setPostDeliveryImg(samplePost);
+                      }}
+                      className="w-full py-1.5 rounded-lg bg-[#1e273d] hover:bg-[#283552] text-slate-400 hover:text-slate-200 text-xs font-medium border border-slate-700 cursor-pointer"
+                    >
+                      + ใช้รูปตัวอย่างหลังส่ง
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-slate-700">
+              <button
+                type="button"
+                onClick={() => setDeliveryProofModalOrder(null)}
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs cursor-pointer transition-colors"
+              >
+                ยกเลิก
+              </button>
+
+              <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => handleSaveDeliveryProof(false)}
+                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-black text-xs shadow-lg cursor-pointer transition-all flex items-center justify-center gap-1.5"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>บันทึกรูปหลักฐาน</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleSaveDeliveryProof(true)}
+                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs shadow-lg shadow-emerald-600/30 cursor-pointer transition-all flex items-center justify-center gap-1.5"
+                >
+                  <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
+                  <span>บันทึก & ปรับเป็น &quot;ส่งสำเร็จเเล้ว&quot;</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FULLSCREEN LIGHTBOX FOR DELIVERY PROOF */}
+      {viewingProofFullscreen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fadeIn">
+          <div className="relative max-w-4xl w-full bg-[#141928] border-2 border-slate-700 rounded-3xl p-5 shadow-2xl">
+            <button
+              type="button"
+              onClick={() => setViewingProofFullscreen(null)}
+              className="absolute top-4 right-4 p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+            >
+              <XCircle className="w-6 h-6" />
+            </button>
+
+            <div className="flex items-center gap-2 mb-4">
+              <Camera className="w-5 h-5 text-cyan-400" />
+              <h4 className="text-base font-black text-white">{viewingProofFullscreen.title}</h4>
+            </div>
+
+            <div className="rounded-2xl overflow-hidden bg-black flex items-center justify-center border border-slate-700 max-h-[75vh]">
+              <img
+                src={viewingProofFullscreen.url}
+                alt="รูปภาพขยาย"
+                className="max-h-[75vh] w-auto object-contain"
+              />
+            </div>
+
+            <div className="mt-4 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setViewingProofFullscreen(null)}
+                className="px-5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs cursor-pointer"
               >
                 ปิดหน้าต่าง
               </button>

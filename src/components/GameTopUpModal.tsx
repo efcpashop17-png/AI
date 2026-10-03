@@ -17,6 +17,8 @@ import {
   ShoppingBag,
   Plus,
   Minus,
+  TrendingUp,
+  Lock,
 } from 'lucide-react';
 
 interface GameTopUpModalProps {
@@ -32,7 +34,12 @@ export const GameTopUpModal: React.FC<GameTopUpModalProps> = ({ game, onClose })
     setIsCartOpen,
     simulateUidCheck,
     setNotification,
+    isAdminLoggedIn,
+    currentCustomerUser,
+    setIsAdminLoginModalOpen,
   } = useApp();
+
+  const isLoggedIn = isAdminLoggedIn || !!currentCustomerUser;
 
   const [playerUid, setPlayerUid] = useState('');
   const [selectedServer, setSelectedServer] = useState(
@@ -40,7 +47,7 @@ export const GameTopUpModal: React.FC<GameTopUpModalProps> = ({ game, onClose })
   );
   const [zoneId, setZoneId] = useState('');
   const [selectedPackage, setSelectedPackage] = useState<GamePackage | null>(
-    game.packages.filter((p) => p.active)[0] || null
+    isLoggedIn ? (game.packages.filter((p) => p.active)[0] || null) : null
   );
   const [quantity, setQuantity] = useState(1);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('promptpay');
@@ -79,10 +86,19 @@ export const GameTopUpModal: React.FC<GameTopUpModalProps> = ({ game, onClose })
   };
 
   const validateInputs = () => {
+    if (!isLoggedIn) {
+      setNotification({
+        type: 'error',
+        message: 'กรุณาเข้าสู่ระบบก่อนเพื่อดูราคาและสั่งซื้อ',
+      });
+      setIsAdminLoginModalOpen(true);
+      return false;
+    }
+
     if (!playerUid.trim()) {
       setNotification({
         type: 'error',
-        message: 'กรุณากรอกไอดีผู้เล่น (UID) ให้เรียบร้อย',
+        message: 'กรุณากรอก User Stock / User ID ให้เรียบร้อย',
       });
       return false;
     }
@@ -98,7 +114,7 @@ export const GameTopUpModal: React.FC<GameTopUpModalProps> = ({ game, onClose })
     if (!selectedPackage) {
       setNotification({
         type: 'error',
-        message: 'กรุณาเลือกแพ็กเกจที่ต้องการเติม',
+        message: 'กรุณาเลือกแพ็กเกจที่ต้องสั่งซื้อ',
       });
       return false;
     }
@@ -206,6 +222,9 @@ export const GameTopUpModal: React.FC<GameTopUpModalProps> = ({ game, onClose })
               <span className="text-xs font-bold px-3 py-0.5 rounded-full bg-cyan-950/60 text-cyan-300 border border-cyan-500/40 flex items-center gap-1">
                 <Zap className="w-3.5 h-3.5 fill-current text-cyan-400" /> ระบบเติมอัตโนมัติ API
               </span>
+              <span className="text-xs font-black px-3 py-0.5 rounded-full bg-gradient-to-r from-amber-500/25 to-yellow-500/20 text-amber-300 border border-amber-400/40 flex items-center gap-1 shadow-[0_0_10px_rgba(245,158,11,0.25)]">
+                <TrendingUp className="w-3.5 h-3.5 text-amber-400" /> เรทของวันนี้: {game.todayRate || `฿${Math.min(...game.packages.map((p) => p.price)).toLocaleString()}`}
+              </span>
             </div>
 
             <h1 className="text-2xl sm:text-4xl font-extrabold text-white font-heading">
@@ -230,10 +249,10 @@ export const GameTopUpModal: React.FC<GameTopUpModalProps> = ({ game, onClose })
               </span>
               <div>
                 <h2 className="text-lg font-extrabold text-white font-heading">
-                  กรอกข้อมูลบัญชีผู้เล่น (Player Account)
+                  กรอกชื่อUser
                 </h2>
                 <p className="text-xs text-violet-300/70 font-medium">
-                  กรุณาตรวจสอบให้ถูกต้องเพื่อความแม่นยำในการส่งเหรียญเข้าไอดี
+                  กรุณาตรวจสอบให้ถูกต้องเพื่อความแม่นยำในการส่งเหรียญUser
                 </p>
               </div>
             </div>
@@ -267,7 +286,7 @@ export const GameTopUpModal: React.FC<GameTopUpModalProps> = ({ game, onClose })
               {/* UID input + Verification */}
               <div>
                 <label className="block text-xs font-semibold text-violet-200 mb-1.5">
-                  {game.accountField.label} *
+                  User Stock / User ID *
                 </label>
                 <div className="flex flex-col sm:flex-row gap-2">
                   <input
@@ -352,7 +371,7 @@ export const GameTopUpModal: React.FC<GameTopUpModalProps> = ({ game, onClose })
                   2
                 </span>
                 <div>
-                  <h2 className="text-lg font-extrabold text-white font-heading">เลือกแพ็กเกจที่ต้องการเติม</h2>
+                  <h2 className="text-lg font-extrabold text-white font-heading">เลือกแพ็กเกจที่ต้องสั่งซื้อ</h2>
                   <p className="text-xs text-violet-300/70 font-medium">
                     เลือกจำนวนเหรียญ/เพชร หรือแพ็กเกจพิเศษที่ต้องการ
                   </p>
@@ -363,19 +382,51 @@ export const GameTopUpModal: React.FC<GameTopUpModalProps> = ({ game, onClose })
               </span>
             </div>
 
+            {/* Login Notice Banner if not logged in */}
+            {!isLoggedIn && (
+              <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-400/30 flex flex-col sm:flex-row items-center justify-between gap-3 text-left">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-400/20 text-amber-400 flex items-center justify-center font-black shrink-0">
+                    <Lock className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <span className="text-sm font-black text-amber-300 block">
+                      กรุณาเข้าสู่ระบบก่อนเพื่อดูราคาและเลือกแพ็กเกจสินค้า
+                    </span>
+                    <span className="text-xs text-amber-200/80">
+                      ระบบสงวนสิทธิ์การดูราคาและสั่งซื้อเฉพาะสมาชิกที่เข้าสู่ระบบแล้วเท่านั้น
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsAdminLoginModalOpen(true)}
+                  className="w-full sm:w-auto px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs shrink-0 cursor-pointer shadow-md transition-all hover:scale-105"
+                >
+                  เข้าสู่ระบบทันที
+                </button>
+              </div>
+            )}
+
             {/* Packages Grid - Cyber Glowing Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
               {activePackages.map((pkg) => {
                 const isSelected = selectedPackage?.id === pkg.id;
-                const discount =
-                  pkg.originalPrice > pkg.price
-                    ? Math.round(((pkg.originalPrice - pkg.price) / pkg.originalPrice) * 100)
-                    : 0;
 
                 return (
                   <div
                     key={pkg.id}
-                    onClick={() => setSelectedPackage(pkg)}
+                    onClick={() => {
+                      if (!isLoggedIn) {
+                        setNotification({
+                          type: 'error',
+                          message: 'กรุณาเข้าสู่ระบบก่อนเพื่อดูราคาและเลือกแพ็กเกจสินค้า',
+                        });
+                        setIsAdminLoginModalOpen(true);
+                        return;
+                      }
+                      setSelectedPackage(pkg);
+                    }}
                     className={`relative p-4.5 rounded-2xl cursor-pointer transition-all duration-200 flex flex-col justify-between ${
                       isSelected
                         ? 'bg-gradient-to-br from-violet-950/90 to-[#1B1433] border-2 border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.35)] scale-[1.02]'
@@ -391,12 +442,6 @@ export const GameTopUpModal: React.FC<GameTopUpModalProps> = ({ game, onClose })
                       ) : (
                         <span className="text-xs font-bold text-violet-300">
                           {pkg.inGameItem}
-                        </span>
-                      )}
-
-                      {discount > 0 && (
-                        <span className="text-xs font-black px-2 py-0.5 rounded bg-rose-500 text-white shadow-sm">
-                          -{discount}%
                         </span>
                       )}
                     </div>
@@ -426,17 +471,26 @@ export const GameTopUpModal: React.FC<GameTopUpModalProps> = ({ game, onClose })
 
                     {/* Price Tag */}
                     <div className="pt-2.5 mt-2 border-t border-violet-500/20 flex items-baseline justify-between">
-                      {pkg.originalPrice > pkg.price ? (
-                        <span className="text-xs text-slate-400 line-through font-mono tabular-nums">
-                          ฿{pkg.originalPrice.toLocaleString()}
-                        </span>
-                      ) : (
-                        <span></span>
-                      )}
+                      {isLoggedIn ? (
+                        <>
+                          {pkg.originalPrice > pkg.price ? (
+                            <span className="text-xs text-slate-400 line-through font-mono tabular-nums">
+                              ฿{pkg.originalPrice.toLocaleString()}
+                            </span>
+                          ) : (
+                            <span></span>
+                          )}
 
-                      <span className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-violet-300 font-mono tabular-nums">
-                        ฿{pkg.price.toLocaleString()}
-                      </span>
+                          <span className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-violet-300 font-mono tabular-nums">
+                            ฿{pkg.price.toLocaleString()}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="w-full text-center inline-flex items-center justify-center gap-1.5 text-xs font-bold text-amber-300 bg-amber-500/10 px-2 py-1 rounded-lg border border-amber-500/30">
+                          <Lock className="w-3.5 h-3.5 text-amber-400" />
+                          <span>ล็อกอินเพื่อดูราคา</span>
+                        </span>
+                      )}
                     </div>
 
                     {/* Selected Indicator */}
@@ -461,7 +515,7 @@ export const GameTopUpModal: React.FC<GameTopUpModalProps> = ({ game, onClose })
                 </span>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <div className="flex items-center gap-2 bg-[#120E24] p-1.5 rounded-xl border border-violet-500/40">
                   <button
                     type="button"
@@ -487,16 +541,16 @@ export const GameTopUpModal: React.FC<GameTopUpModalProps> = ({ game, onClose })
                   </button>
                 </div>
 
-                {/* Quick Quantity Chips */}
-                <div className="hidden sm:flex gap-1.5">
-                  {[1, 2, 5, 10].map((num) => (
+                {/* Quick Quantity Chips: 1, 5, 10, 15, 20 */}
+                <div className="flex flex-wrap gap-1.5">
+                  {[1, 5, 10, 15, 20].map((num) => (
                     <button
                       key={num}
                       type="button"
                       onClick={() => setQuantity(num)}
                       className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                         quantity === num
-                          ? 'bg-gradient-to-r from-violet-600 to-cyan-500 text-white border border-cyan-400 shadow-md'
+                          ? 'bg-gradient-to-r from-violet-600 to-cyan-500 text-white border border-cyan-400 shadow-md scale-105'
                           : 'bg-[#120E24] text-violet-300 hover:bg-[#1B1433] border border-violet-500/30'
                       }`}
                     >
@@ -666,7 +720,7 @@ export const GameTopUpModal: React.FC<GameTopUpModalProps> = ({ game, onClose })
 
             {/* Pricing math */}
             <div className="pt-4 border-t border-violet-500/25 space-y-2">
-              {totalOriginalPrice > totalPrice && (
+              {isLoggedIn && totalOriginalPrice > totalPrice && (
                 <div className="flex items-center justify-between text-xs font-medium text-slate-400">
                   <span>ราคาเต็มในเกม:</span>
                   <span className="line-through font-mono tabular-nums">
@@ -675,7 +729,7 @@ export const GameTopUpModal: React.FC<GameTopUpModalProps> = ({ game, onClose })
                 </div>
               )}
 
-              {totalSavings > 0 && (
+              {isLoggedIn && totalSavings > 0 && (
                 <div className="flex items-center justify-between text-xs text-emerald-400 font-bold">
                   <span>ประหยัดได้ทั้งหมด:</span>
                   <span className="font-mono text-sm tabular-nums">-฿{totalSavings.toLocaleString()}</span>
@@ -684,34 +738,53 @@ export const GameTopUpModal: React.FC<GameTopUpModalProps> = ({ game, onClose })
 
               <div className="flex items-baseline justify-between pt-2">
                 <span className="text-sm font-extrabold text-white font-heading">ยอดชำระสุทธิ:</span>
-                <span className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-violet-300 font-mono tracking-tight tabular-nums drop-shadow-[0_0_15px_rgba(6,182,212,0.4)]">
-                  ฿{totalPrice.toLocaleString()}
-                </span>
+                {isLoggedIn ? (
+                  <span className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-violet-300 font-mono tracking-tight tabular-nums drop-shadow-[0_0_15px_rgba(6,182,212,0.4)]">
+                    ฿{totalPrice.toLocaleString()}
+                  </span>
+                ) : (
+                  <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5 bg-amber-500/10 px-3 py-1.5 rounded-xl border border-amber-500/30">
+                    <Lock className="w-3.5 h-3.5 text-amber-400" />
+                    <span>ล็อกอินเพื่อดูราคา</span>
+                  </span>
+                )}
               </div>
             </div>
 
-            {/* ACTION 1: Add to Cart (User Request) */}
+            {/* ACTION BUTTONS */}
             <div className="space-y-3 pt-2">
-              <button
-                type="button"
-                onClick={handleAddToCart}
-                disabled={!selectedPackage}
-                className="w-full py-3.5 rounded-2xl bg-[#1B1433] hover:bg-[#251b47] text-cyan-300 font-extrabold text-sm sm:text-base border border-violet-500/50 shadow-[0_0_15px_rgba(139,92,246,0.2)] flex items-center justify-center gap-2 cursor-pointer transition-all hover:scale-[1.01] disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <ShoppingBag className="w-5 h-5 text-cyan-400 stroke-[2.5]" />
-                <span>เพิ่มลงในตะกร้าสินค้า (Add to Cart)</span>
-              </button>
+              {isLoggedIn ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleAddToCart}
+                    disabled={!selectedPackage}
+                    className="w-full py-3.5 rounded-2xl bg-[#1B1433] hover:bg-[#251b47] text-cyan-300 font-extrabold text-sm sm:text-base border border-violet-500/50 shadow-[0_0_15px_rgba(139,92,246,0.2)] flex items-center justify-center gap-2 cursor-pointer transition-all hover:scale-[1.01] disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <ShoppingBag className="w-5 h-5 text-cyan-400 stroke-[2.5]" />
+                    <span>เพิ่มลงในตะกร้าสินค้า (Add to Cart)</span>
+                  </button>
 
-              {/* ACTION 2: Buy Now Directly with Neon Violet Glow */}
-              <button
-                type="button"
-                onClick={handleDirectBuy}
-                disabled={!selectedPackage}
-                className="w-full py-4 rounded-2xl neon-btn-purple text-base shadow-[0_0_25px_rgba(168,85,247,0.5)] transition-all transform active:scale-98 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed font-heading"
-              >
-                <Zap className="w-5 h-5 text-white fill-current" />
-                <span>ชำระเงินและเติมทันที (฿{totalPrice.toLocaleString()})</span>
-              </button>
+                  <button
+                    type="button"
+                    onClick={handleDirectBuy}
+                    disabled={!selectedPackage}
+                    className="w-full py-4 rounded-2xl neon-btn-purple text-base shadow-[0_0_25px_rgba(168,85,247,0.5)] transition-all transform active:scale-98 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed font-heading"
+                  >
+                    <Zap className="w-5 h-5 text-white fill-current" />
+                    <span>ชำระเงินและสั่งซื้อทันที (฿{totalPrice.toLocaleString()})</span>
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setIsAdminLoginModalOpen(true)}
+                  className="w-full py-4 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-sm sm:text-base shadow-xl shadow-amber-400/20 flex items-center justify-center gap-2 cursor-pointer transition-all hover:scale-[1.01]"
+                >
+                  <Lock className="w-5 h-5 text-slate-950 stroke-[2.5]" />
+                  <span>เข้าสู่ระบบเพื่อสั่งซื้อ</span>
+                </button>
+              )}
             </div>
 
             <p className="text-[11px] text-center text-violet-300/70 font-medium leading-relaxed">
