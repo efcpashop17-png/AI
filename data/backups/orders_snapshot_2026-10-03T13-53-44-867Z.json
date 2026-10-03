@@ -74,52 +74,44 @@
     "customerId": "usr_001",
     "username": "client_arm",
     "customerName": "คุณอาร์ม ชัยพล (ลูกค้าราคาส่งประจำ)",
-    "gameId": "efootball",
-    "gameName": "eFootball",
-    "packageId": "efb-pkg-3",
-    "packageName": "1,050 eFootball Coins",
-    "inGameItem": "eFootball Coins",
-    "itemAmount": 1050,
-    "playerUid": "384-918-294",
-    "playerNamePreview": "⚡BarcaKing_TH",
-    "originalPrice": 389,
-    "price": 349,
+    "gameId": "rov",
+    "gameName": "RoV: Realm of Valor",
+    "packageId": "rov-pkg-3",
+    "packageName": "210 คูปอง",
+    "inGameItem": "คูปอง",
+    "itemAmount": 210,
+    "playerUid": "d938a1b2c4e5f67890abcdef12345678",
+    "playerNamePreview": "⚡GodSlayer_TH",
+    "originalPrice": 200,
+    "price": 185,
     "contactPhone": "089-123-4567",
-    "contactEmail": "player.efootball@gmail.com",
+    "contactEmail": "player.rov@gmail.com",
     "paymentMethod": "promptpay",
     "status": "completed",
     "paymentStatus": "paid",
-    "createdAt": "2026-10-01 10:15:20",
+    "createdAt": "2026-10-01T07:45:10Z",
     "paidAt": "2026-10-01 10:16:45",
     "completedAt": "2026-10-01 10:22:10",
     "timeline": [
       {
-        "id": "t1",
         "status": "pending_payment",
-        "time": "10:15",
-        "description": "สร้างคำสั่งซื้อสำเร็จ รอชำระเงิน",
-        "actor": "system"
+        "time": "2026-10-01 07:45:10",
+        "description": "สร้างคำสั่งซื้อ รหัส GP-892410"
       },
       {
-        "id": "t2",
         "status": "verifying",
-        "time": "10:16",
-        "description": "ลูกค้าแนบสลิป EasySlip ตรวจสอบยอด 349฿ ถูกต้อง",
-        "actor": "easyslip"
+        "time": "2026-10-01 07:45:28",
+        "description": "ระบบตรวจพบการชำระเงินผ่าน PromptPay QR อัตโนมัติ"
       },
       {
-        "id": "t3",
         "status": "processing",
-        "time": "10:18",
-        "description": "ระบบส่งคำขอตัดสต็อกไปยังเซิร์ฟเวอร์เกม",
-        "actor": "system"
+        "time": "2026-10-01 07:45:30",
+        "description": "ระบบบอท API ส่งเหรียญ 210+15 คูปอง เข้า UID ของผู้เล่น"
       },
       {
-        "id": "t4",
         "status": "completed",
-        "time": "10:22",
-        "description": "เติมเหรียญ 1,050 eFootball Coins เข้า UID เรียบร้อย",
-        "actor": "admin"
+        "time": "2026-10-01 07:46:12",
+        "description": "เติมสำเร็จเรียบร้อย คูปองเข้าไอดีแล้ว"
       }
     ],
     "bonusAmount": 15,
