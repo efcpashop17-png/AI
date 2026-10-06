@@ -24,6 +24,8 @@ import {
   Camera,
   Lock,
   User,
+  Layers,
+  Filter,
 } from 'lucide-react';
 import { TopUpOrder } from '../types';
 import { getOrderItems, formatOrderPackagesNotation, formatPackageQuantityTag } from '../utils/orderHelper';
@@ -62,6 +64,8 @@ export const OrderTrackingView: React.FC = () => {
   }, [orders, currentCustomerUser, isAdminLoggedIn]);
 
   const [searchQuery, setSearchQuery] = useState('');
+  type StatusFilterType = 'all' | 'pending' | 'success' | 'failed';
+  const [statusFilter, setStatusFilter] = useState<StatusFilterType>('all');
   const [selectedOrderId, setSelectedOrderId] = useState<string>(userOrders[0]?.id || '');
   const [viewingSlipUrl, setViewingSlipUrl] = useState<string | null>(null);
   const [isVerifyingSlip, setIsVerifyingSlip] = useState(false);
@@ -71,18 +75,49 @@ export const OrderTrackingView: React.FC = () => {
   const [isComparisonModalOpen, setIsComparisonModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const selectedOrder = userOrders.find((o) => o.id === selectedOrderId) || userOrders[0] || null;
+  // Status counts for customer filter badges
+  const pendingCount = useMemo(() => {
+    return userOrders.filter((o) => o.status !== 'completed' && o.status !== 'failed').length;
+  }, [userOrders]);
 
-  const filteredOrders = userOrders.filter((o) => {
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase().trim();
-    return (
-      o.id.toLowerCase().includes(q) ||
-      o.playerUid.toLowerCase().includes(q) ||
-      o.gameName.toLowerCase().includes(q) ||
-      (o.contactPhone && o.contactPhone.includes(q))
-    );
-  });
+  const successCount = useMemo(() => {
+    return userOrders.filter((o) => o.status === 'completed').length;
+  }, [userOrders]);
+
+  const failedCount = useMemo(() => {
+    return userOrders.filter((o) => o.status === 'failed').length;
+  }, [userOrders]);
+
+  const filteredOrders = useMemo(() => {
+    return userOrders.filter((o) => {
+      // 1. Status Filter (Pending, Success, Failed)
+      if (statusFilter === 'pending') {
+        if (o.status === 'completed' || o.status === 'failed') return false;
+      } else if (statusFilter === 'success') {
+        if (o.status !== 'completed') return false;
+      } else if (statusFilter === 'failed') {
+        if (o.status !== 'failed') return false;
+      }
+
+      // 2. Search Query Filter
+      if (!searchQuery.trim()) return true;
+      const q = searchQuery.toLowerCase().trim();
+      return (
+        o.id.toLowerCase().includes(q) ||
+        o.playerUid.toLowerCase().includes(q) ||
+        o.gameName.toLowerCase().includes(q) ||
+        (o.contactPhone && o.contactPhone.includes(q))
+      );
+    });
+  }, [userOrders, statusFilter, searchQuery]);
+
+  const selectedOrder = useMemo(() => {
+    if (selectedOrderId) {
+      const found = filteredOrders.find((o) => o.id === selectedOrderId);
+      if (found) return found;
+    }
+    return filteredOrders[0] || userOrders.find((o) => o.id === selectedOrderId) || userOrders[0] || null;
+  }, [filteredOrders, userOrders, selectedOrderId]);
 
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -219,26 +254,142 @@ export const OrderTrackingView: React.FC = () => {
             />
           </div>
         </div>
+
+        {/* Status Filtering Tabs (All, Pending, Success, Failed) */}
+        <div className="pt-3 flex flex-wrap items-center justify-center gap-2 max-w-xl mx-auto">
+          <button
+            type="button"
+            onClick={() => setStatusFilter('all')}
+            className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 cursor-pointer transition-all ${
+              statusFilter === 'all'
+                ? 'bg-amber-400 text-slate-950 font-black shadow-lg shadow-amber-400/20 scale-105'
+                : 'bg-[#141928] text-slate-300 hover:text-white border border-slate-700 hover:border-slate-500'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>ทั้งหมด (All)</span>
+            <span
+              className={`text-[11px] px-2 py-0.5 rounded-full font-mono font-bold ${
+                statusFilter === 'all'
+                  ? 'bg-slate-950/20 text-slate-950'
+                  : 'bg-slate-800 text-slate-400'
+              }`}
+            >
+              {userOrders.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setStatusFilter('pending')}
+            className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 cursor-pointer transition-all ${
+              statusFilter === 'pending'
+                ? 'bg-amber-500 text-slate-950 font-black shadow-lg shadow-amber-500/25 scale-105'
+                : 'bg-[#141928] text-amber-300 hover:text-amber-200 border border-amber-500/30 hover:border-amber-400/60'
+            }`}
+          >
+            <Clock className="w-3.5 h-3.5" />
+            <span>รอดำเนินการ (Pending)</span>
+            <span
+              className={`text-[11px] px-2 py-0.5 rounded-full font-mono font-bold ${
+                statusFilter === 'pending'
+                  ? 'bg-slate-950/20 text-slate-950'
+                  : 'bg-amber-950/60 text-amber-300'
+              }`}
+            >
+              {pendingCount}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setStatusFilter('success')}
+            className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 cursor-pointer transition-all ${
+              statusFilter === 'success'
+                ? 'bg-emerald-400 text-slate-950 font-black shadow-lg shadow-emerald-400/25 scale-105'
+                : 'bg-[#141928] text-emerald-300 hover:text-emerald-200 border border-emerald-500/30 hover:border-emerald-400/60'
+            }`}
+          >
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            <span>สำเร็จ (Success)</span>
+            <span
+              className={`text-[11px] px-2 py-0.5 rounded-full font-mono font-bold ${
+                statusFilter === 'success'
+                  ? 'bg-slate-950/20 text-slate-950'
+                  : 'bg-emerald-950/60 text-emerald-300'
+              }`}
+            >
+              {successCount}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setStatusFilter('failed')}
+            className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 cursor-pointer transition-all ${
+              statusFilter === 'failed'
+                ? 'bg-rose-500 text-white font-black shadow-lg shadow-rose-500/25 scale-105'
+                : 'bg-[#141928] text-rose-300 hover:text-rose-200 border border-rose-500/30 hover:border-rose-400/60'
+            }`}
+          >
+            <AlertCircle className="w-3.5 h-3.5" />
+            <span>ยกเลิก (Failed)</span>
+            <span
+              className={`text-[11px] px-2 py-0.5 rounded-full font-mono font-bold ${
+                statusFilter === 'failed'
+                  ? 'bg-slate-950/20 text-white'
+                  : 'bg-rose-950/60 text-rose-300'
+              }`}
+            >
+              {failedCount}
+            </span>
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Col: Orders List */}
         <div className="lg:col-span-1 space-y-3">
           <div className="flex items-center justify-between text-xs font-bold text-slate-300 px-1">
-            <span>รายการคำสั่งซื้อล่าสุด ({filteredOrders.length})</span>
-            {searchQuery && (
+            <div className="flex items-center gap-1.5">
+              <Filter className="w-3.5 h-3.5 text-amber-400" />
+              <span>
+                {statusFilter === 'all' && 'รายการคำสั่งซื้อทั้งหมด'}
+                {statusFilter === 'pending' && 'รายการรอดำเนินการ'}
+                {statusFilter === 'success' && 'รายการสำเร็จแล้ว'}
+                {statusFilter === 'failed' && 'รายการที่ยกเลิก'}
+                {' '}({filteredOrders.length})
+              </span>
+            </div>
+            {(searchQuery || statusFilter !== 'all') && (
               <button
-                onClick={() => setSearchQuery('')}
-                className="text-amber-400 hover:text-amber-300 font-bold text-[11px]"
+                onClick={() => {
+                  setSearchQuery('');
+                  setStatusFilter('all');
+                }}
+                className="text-amber-400 hover:text-amber-300 font-bold text-[11px] cursor-pointer"
               >
-                ดูทั้งหมด
+                ล้างตัวกรอง
               </button>
             )}
           </div>
 
           {filteredOrders.length === 0 ? (
-            <div className="p-8 rounded-2xl bg-[#141928] border-2 border-slate-700 text-center text-slate-400 text-xs">
-              ไม่พบรายการคำสั่งซื้อที่ค้นหา
+            <div className="p-8 rounded-2xl bg-[#141928] border-2 border-slate-700 text-center text-slate-400 text-xs space-y-2.5">
+              <AlertCircle className="w-8 h-8 text-slate-600 mx-auto" />
+              <p className="font-bold text-slate-300">ไม่พบรายการคำสั่งซื้อในหมวดหมู่นี้</p>
+              {(statusFilter !== 'all' || searchQuery) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStatusFilter('all');
+                    setSearchQuery('');
+                  }}
+                  className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs cursor-pointer shadow transition-all hover:scale-105"
+                >
+                  แสดงรายการทั้งหมด
+                </button>
+              )}
             </div>
           ) : (
             <div className="space-y-2.5 max-h-[600px] overflow-y-auto pr-1">
