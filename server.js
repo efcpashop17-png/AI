@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import http from "http";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
@@ -460,16 +461,14 @@ process.on("unhandledRejection", (reason, promise) => {
   console.error("Unhandled Rejection:", reason);
 });
 
-// Start listening dynamically on process.env.PORT, binding to 0.0.0.0
-const serverPort = isNaN(Number(PORT)) ? PORT : Number(PORT);
-if (typeof serverPort === "number") {
-  app.listen(serverPort, "0.0.0.0", () => {
-    console.log(`EF CPA Shop server active and listening on port ${serverPort}`);
-  });
-} else {
-  app.listen(serverPort, () => {
-    console.log(`EF CPA Shop server listening on socket ${serverPort}`);
-  });
-}
+// Create HTTP server and listen on PORT (supports Nginx and Passenger without restrictive host binding)
+const server = http.createServer(app);
+server.keepAliveTimeout = 65000;
+server.headersTimeout = 66000;
 
+server.listen(PORT, () => {
+  console.log(`EF CPA Shop server active and listening on port ${PORT}`);
+});
+
+export { app, server };
 export default app;
