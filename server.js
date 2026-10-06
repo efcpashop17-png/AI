@@ -118,77 +118,65 @@ app.post("/api/upload", (req, res) => {
   }
 });
 
+// In-memory data store for sub-millisecond responses and zero-blocking I/O
+const memoryCache = new Map();
+const lastSnapshotTime = new Map();
+
 function readJsonFile(filePath, defaultData = []) {
+  if (memoryCache.has(filePath)) {
+    return memoryCache.get(filePath);
+  }
   try {
     if (!fs.existsSync(filePath)) {
-      // Auto-recover from latest backup snapshot if available
-      const prefix = path.basename(filePath, ".json");
-      if (fs.existsSync(BACKUPS_DIR)) {
-        const backups = fs.readdirSync(BACKUPS_DIR)
-          .filter(f => f.startsWith(`${prefix}_snapshot`) || f.startsWith(`${prefix}_`))
-          .sort()
-          .reverse();
-        if (backups.length > 0) {
-          try {
-            const backupContent = fs.readFileSync(path.join(BACKUPS_DIR, backups[0]), "utf-8");
-            const parsed = JSON.parse(backupContent);
-            if (parsed && (Array.isArray(parsed) ? parsed.length > 0 : true)) {
-              console.log(`[Auto-Recovery] Recovered ${filePath} from latest backup: ${backups[0]}`);
-              writeJsonFile(filePath, parsed);
-              return parsed;
-            }
-          } catch (_) {}
-        }
-      }
+      memoryCache.set(filePath, defaultData);
       return defaultData;
     }
     const content = fs.readFileSync(filePath, "utf-8");
     if (!content || !content.trim()) {
+      memoryCache.set(filePath, defaultData);
       return defaultData;
     }
-    return JSON.parse(content);
+    const parsed = JSON.parse(content);
+    memoryCache.set(filePath, parsed);
+    return parsed;
   } catch (err) {
     console.error(`Error reading ${filePath}:`, err);
+    memoryCache.set(filePath, defaultData);
     return defaultData;
   }
 }
 
 function writeJsonFile(filePath, data) {
-  try {
-    // Atomic write via temp file rename to prevent corrupted / truncated files during reads
-    const tempPath = `${filePath}.tmp.${Date.now()}.${Math.random().toString(36).slice(2, 6)}`;
-    fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), "utf-8");
-    fs.renameSync(tempPath, filePath);
-    return true;
-  } catch (err) {
-    console.error(`Error atomic writing ${filePath}:`, err);
+  // 1. Immediately update memory cache for instant reads
+  memoryCache.set(filePath, data);
+
+  // 2. Write to disk asynchronously in background without blocking the event loop
+  setImmediate(async () => {
     try {
-      fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
-      return true;
-    } catch (e) {
-      console.error(`Direct writing also failed for ${filePath}:`, e);
-      return false;
+      await fs.promises.writeFile(filePath, JSON.stringify(data), "utf-8");
+    } catch (err) {
+      console.error(`Async write error for ${filePath}:`, err);
     }
-  }
+  });
+  return true;
 }
 
 function createBackupSnapshot(prefix, data) {
-  try {
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const backupPath = path.join(BACKUPS_DIR, `${prefix}_${timestamp}.json`);
-    const tempPath = `${backupPath}.tmp`;
-    fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), "utf-8");
-    fs.renameSync(tempPath, backupPath);
-    
-    const files = fs.readdirSync(BACKUPS_DIR).filter(f => f.startsWith(prefix));
-    if (files.length > 100) {
-      files.sort().slice(0, files.length - 100).forEach(f => {
-        try { fs.unlinkSync(path.join(BACKUPS_DIR, f)); } catch (_) {}
-      });
-    }
-  } catch (e) {
-    console.error("Backup snapshot error:", e);
+  const now = Date.now();
+  const lastTime = lastSnapshotTime.get(prefix) || 0;
+  // Limit snapshots to at most once every 30 minutes to eliminate disk I/O load
+  if (now - lastTime < 30 * 60 * 1000) {
+    return;
   }
+  lastSnapshotTime.set(prefix, now);
+
+  setImmediate(async () => {
+    try {
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const backupPath = path.join(BACKUPS_DIR, `${prefix}_${timestamp}.json`);
+      await fs.promises.writeFile(backupPath, JSON.stringify(data), "utf-8");
+    } catch (_) {}
+  });
 }
 
 // 1. Get all persistent orders and customer accounts

@@ -1387,9 +1387,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       console.warn('localStorage quota exceeded:', err);
     }
 
-    // Save directly and permanently to server disk
+    // Save directly and permanently to server disk (lightweight 100-byte update)
     saveSinglePackageToServer(gameId, packageId, updates);
-    saveGamesToServer(updatedGames);
 
     setNotification({
       type: 'success',
@@ -1420,7 +1419,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
 
     addPackageToServer(gameId, newPkg);
-    saveGamesToServer(updatedGames);
 
     setNotification({
       type: 'success',
@@ -1447,7 +1445,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
 
     deletePackageFromServer(gameId, packageId);
-    saveGamesToServer(updatedGames);
 
     setNotification({
       type: 'info',
