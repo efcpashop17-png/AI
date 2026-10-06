@@ -22,7 +22,8 @@ SCOPES.forEach((scope) => {
 });
 
 let isSigningIn = false;
-let cachedAccessToken: string | null = null;
+const TOKEN_KEY = 'efcpa_google_access_token';
+let cachedAccessToken: string | null = localStorage.getItem(TOKEN_KEY) || null;
 
 // Initialize auth state listener
 export const initGoogleAuth = (
@@ -31,14 +32,16 @@ export const initGoogleAuth = (
 ) => {
   return onAuthStateChanged(auth, async (user: User | null) => {
     if (user) {
-      if (cachedAccessToken) {
-        if (onAuthSuccess) onAuthSuccess(user, cachedAccessToken);
+      const storedToken = localStorage.getItem(TOKEN_KEY);
+      if (storedToken) {
+        cachedAccessToken = storedToken;
+        if (onAuthSuccess) onAuthSuccess(user, storedToken);
       } else if (!isSigningIn) {
-        cachedAccessToken = null;
         if (onAuthFailure) onAuthFailure();
       }
     } else {
       cachedAccessToken = null;
+      localStorage.removeItem(TOKEN_KEY);
       if (onAuthFailure) onAuthFailure();
     }
   });
@@ -55,6 +58,7 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
     }
 
     cachedAccessToken = credential.accessToken;
+    localStorage.setItem(TOKEN_KEY, cachedAccessToken);
     return { user: result.user, accessToken: cachedAccessToken };
   } catch (error: any) {
     console.error('Google Sign In Error:', error);
@@ -65,10 +69,11 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
 };
 
 export const getGoogleAccessToken = async (): Promise<string | null> => {
-  return cachedAccessToken;
+  return cachedAccessToken || localStorage.getItem(TOKEN_KEY) || null;
 };
 
 export const googleLogout = async () => {
   await signOut(auth);
   cachedAccessToken = null;
+  localStorage.removeItem(TOKEN_KEY);
 };

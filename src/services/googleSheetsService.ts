@@ -9,6 +9,7 @@ const STORAGE_KEYS = {
   LAST_COUNT: 'efcpa_google_sheet_last_count',
   LAST_STATUS: 'efcpa_google_sheet_last_status',
   LAST_MESSAGE: 'efcpa_google_sheet_last_message',
+  WEBHOOK_URL: 'efcpa_google_sheet_webhook_url',
 };
 
 export const SHEET_HEADERS = [
@@ -33,6 +34,7 @@ export const getStoredSheetConfig = () => {
   return {
     spreadsheetId: localStorage.getItem(STORAGE_KEYS.SPREADSHEET_ID) || '',
     spreadsheetTitle: localStorage.getItem(STORAGE_KEYS.SPREADSHEET_TITLE) || 'EF CPA Shop - Order Records',
+    webhookUrl: localStorage.getItem(STORAGE_KEYS.WEBHOOK_URL) || '',
     autoBackupEnabled: localStorage.getItem(STORAGE_KEYS.AUTO_BACKUP) !== 'false', // default true
     lastBackupTime: localStorage.getItem(STORAGE_KEYS.LAST_BACKUP) || '',
     lastBackupCount: Number(localStorage.getItem(STORAGE_KEYS.LAST_COUNT) || 0),
@@ -47,6 +49,9 @@ export const saveStoredSheetConfig = (config: Partial<ReturnType<typeof getStore
   }
   if (config.spreadsheetTitle !== undefined) {
     localStorage.setItem(STORAGE_KEYS.SPREADSHEET_TITLE, config.spreadsheetTitle);
+  }
+  if (config.webhookUrl !== undefined) {
+    localStorage.setItem(STORAGE_KEYS.WEBHOOK_URL, config.webhookUrl);
   }
   if (config.autoBackupEnabled !== undefined) {
     localStorage.setItem(STORAGE_KEYS.AUTO_BACKUP, String(config.autoBackupEnabled));
@@ -278,4 +283,73 @@ export const backupOrdersToGoogleSheet = async (
     });
     return { success: false, count: 0, error: err.message };
   }
+};
+
+/**
+ * Sync orders directly via Google Apps Script Webhook (Zero OAuth login required)
+ */
+export const syncOrdersViaWebhook = async (
+  webhookUrl: string,
+  orders: TopUpOrder[]
+): Promise<{ success: boolean; count: number; error?: string }> => {
+  try {
+    saveStoredSheetConfig({
+      lastBackupStatus: 'syncing',
+      lastBackupMessage: `กำลังส่ง ${orders.length} ออเดอร์ผ่าน Webhook ไปยัง Google Sheet...`,
+    });
+
+    const rows = orders.map(formatOrderToRow);
+    const payload = {
+      headers: SHEET_HEADERS,
+      orders: rows,
+      count: orders.length,
+      timestamp: new Date().toISOString(),
+    };
+
+    await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      mode: 'no-cors',
+      body: JSON.stringify(payload),
+    });
+
+    const nowIso = new Date().toISOString();
+    saveStoredSheetConfig({
+      lastBackupTime: nowIso,
+      lastBackupCount: orders.length,
+      lastBackupStatus: 'success',
+      lastBackupMessage: `ส่งข้อมูลผ่าน Webhook เรียบร้อย (${orders.length} ออเดอร์ เมื่อ ${new Date().toLocaleTimeString('th-TH')})`,
+    });
+
+    return { success: true, count: orders.length };
+  } catch (err: any) {
+    console.error('Webhook sync error:', err);
+    saveStoredSheetConfig({
+      lastBackupStatus: 'error',
+      lastBackupMessage: `ส่งข้อมูลผ่าน Webhook ไม่สำเร็จ: ${err.message}`,
+    });
+    return { success: false, count: 0, error: err.message };
+  }
+};
+
+/**
+ * Direct CSV download with UTF-8 BOM for immediate opening in Excel & Google Sheets
+ */
+export const exportOrdersCsv = (orders: TopUpOrder[]) => {
+  const headers = SHEET_HEADERS.map((h) => `"${h.replace(/"/g, '""')}"`).join(',');
+  const rows = orders.map((o) =>
+    formatOrderToRow(o)
+      .map((val) => `"${String(val ?? '').replace(/"/g, '""')}"`)
+      .join(',')
+  );
+  const csvContent = '\uFEFF' + [headers, ...rows].join('\r\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `EF_CPA_Shop_Orders_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 };

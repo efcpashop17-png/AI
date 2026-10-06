@@ -11,6 +11,10 @@ import {
   ArrowUpRight,
   LogOut,
   Calendar,
+  Download,
+  Copy,
+  Code2,
+  Send,
 } from 'lucide-react';
 import {
   initAuth,
@@ -23,6 +27,8 @@ import {
   saveStoredSheetConfig,
   createNewOrderSpreadsheet,
   backupOrdersToGoogleSheet,
+  syncOrdersViaWebhook,
+  exportOrdersCsv,
 } from '../services/googleSheetsService';
 import { useApp } from '../context/AppContext';
 import { User } from 'firebase/auth';
@@ -37,6 +43,8 @@ export const GoogleSheetsSyncPanel: React.FC = () => {
   // Sheet config state
   const [config, setConfig] = useState(getStoredSheetConfig());
   const [inputSheetId, setInputSheetId] = useState(config.spreadsheetId);
+  const [inputWebhookUrl, setInputWebhookUrl] = useState(config.webhookUrl);
+  const [showScriptGuide, setShowScriptGuide] = useState(false);
   const [isCreatingSheet, setIsCreatingSheet] = useState(false);
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [actionNotice, setActionNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -202,12 +210,69 @@ export const GoogleSheetsSyncPanel: React.FC = () => {
     });
   };
 
+  const handleSaveWebhookUrl = () => {
+    const cleanUrl = inputWebhookUrl.trim();
+    saveStoredSheetConfig({ webhookUrl: cleanUrl });
+    setConfig(getStoredSheetConfig());
+    setActionNotice({
+      type: 'success',
+      message: cleanUrl ? 'บันทึก Google Apps Script Webhook URL เรียบร้อย' : 'ลบ Webhook URL เรียบร้อย',
+    });
+  };
+
+  const handleExecuteWebhookSync = async () => {
+    const targetUrl = config.webhookUrl || inputWebhookUrl.trim();
+    if (!targetUrl) {
+      setActionNotice({
+        type: 'error',
+        message: 'กรุณาระบุ Google Apps Script Webhook URL ก่อนกดส่งข้อมูล',
+      });
+      return;
+    }
+
+    setIsBackingUp(true);
+    setActionNotice(null);
+    try {
+      const result = await syncOrdersViaWebhook(targetUrl, orders);
+      if (result.success) {
+        setConfig(getStoredSheetConfig());
+        setActionNotice({
+          type: 'success',
+          message: `ส่งข้อมูลผ่าน Webhook สำเร็จแล้ว ${result.count} ออเดอร์! ตรวจสอบที่ Google Sheet ได้ทันที`,
+        });
+      } else {
+        throw new Error(result.error || 'Webhook sync failed');
+      }
+    } catch (err: any) {
+      setActionNotice({
+        type: 'error',
+        message: `ส่งข้อมูลผ่าน Webhook ไม่สำเร็จ: ${err.message}`,
+      });
+    } finally {
+      setIsBackingUp(false);
+    }
+  };
+
+  const handleDownloadCsv = () => {
+    exportOrdersCsv(orders);
+    setActionNotice({
+      type: 'success',
+      message: `ดาวน์โหลดไฟล์ CSV เรียบร้อย (${orders.length} ออเดอร์) สามารถเปิดใน Excel หรือ Import เข้า Google Sheets ได้ทันที`,
+    });
+  };
+
   const handleExecuteBackup = async (overrideToken?: string) => {
     const currentToken = overrideToken || token || (await getAccessToken());
+
+    // If webhookUrl is configured and no OAuth token, automatically use Webhook!
+    if (!currentToken && (config.webhookUrl || inputWebhookUrl.trim())) {
+      return handleExecuteWebhookSync();
+    }
+
     if (!currentToken) {
       setActionNotice({
         type: 'error',
-        message: 'กรุณาเชื่อมต่อบัญชี Google ก่อนเริ่มการสำรองข้อมูล',
+        message: 'ยังไม่ได้เชื่อมต่อ Google Account: คุณสามารถกด "Sign in with Google" ด้านบน หรือใช้ "วิธีที่ 1 Webhook URL" หรือกด "ดาวน์โหลดไฟล์ CSV" ด้านล่างได้ทันทีครับ',
       });
       return;
     }
@@ -496,6 +561,168 @@ export const GoogleSheetsSyncPanel: React.FC = () => {
                   <span>สำรองข้อมูลทันที ({orders.length} ออเดอร์)</span>
                 </>
               )}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Alternative Sync Methods: Webhook & CSV Export */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-2">
+        {/* Card 3: Google Apps Script Webhook (Zero-Login Method) */}
+        <div className="bg-[#181230] border-2 border-emerald-500/30 rounded-xl p-4.5 space-y-4">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-black text-emerald-400 flex items-center gap-2">
+              <Send className="w-4 h-4 text-emerald-400" />
+              วิธีที่ 1: ซิงก์ผ่าน Webhook URL (แนะนำที่สุด 100%)
+            </span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/40">
+              ไม่ต้องล็อกอิน Google
+            </span>
+          </div>
+
+          <p className="text-[11px] text-violet-200/80">
+            วาง Google Apps Script Web App URL เพื่อส่งออเดอร์เข้า Google Sheet ได้ทันที ไม่ติดปัญหาโดเมนหรือการล็อกอิน
+          </p>
+
+          <div className="space-y-2">
+            <label className="text-[11px] text-violet-300/80 block">
+              Google Apps Script Webhook URL:
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={inputWebhookUrl}
+                onChange={(e) => setInputWebhookUrl(e.target.value)}
+                placeholder="https://script.google.com/macros/s/AKfycb.../exec"
+                className="flex-1 px-3.5 py-2 rounded-xl bg-[#0F0B1E] border border-emerald-500/30 text-xs text-white placeholder-violet-500/50 outline-none focus:border-emerald-400 font-mono"
+              />
+              <button
+                type="button"
+                onClick={handleSaveWebhookUrl}
+                className="px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold transition-colors cursor-pointer"
+              >
+                บันทึก
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-violet-500/20">
+            <button
+              type="button"
+              onClick={() => setShowScriptGuide(!showScriptGuide)}
+              className="text-xs text-cyan-400 hover:text-cyan-300 font-bold flex items-center gap-1.5 cursor-pointer"
+            >
+              <Code2 className="w-3.5 h-3.5" />
+              <span>{showScriptGuide ? 'ซ่อนวิธีติดตั้ง Apps Script' : 'คลิกดูโค้ด Apps Script (ติดตั้ง 1 นาที)'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleExecuteWebhookSync}
+              disabled={isBackingUp || !inputWebhookUrl}
+              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-md cursor-pointer transition-all"
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>ส่งข้อมูลผ่าน Webhook ทันที</span>
+            </button>
+          </div>
+
+          {/* Collapsible Apps Script Guide */}
+          {showScriptGuide && (
+            <div className="p-3.5 rounded-xl bg-[#0F0B1E] border border-cyan-500/30 space-y-3 text-left animate-fadeIn">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-black text-cyan-300">
+                  วิธีสร้าง Webhook ใน Google Sheet:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const code = `function doPost(e) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var data = JSON.parse(e.postData.contents);
+  if (data.headers && sheet.getLastRow() === 0) {
+    sheet.appendRow(data.headers);
+  }
+  if (data.orders && data.orders.length > 0) {
+    for (var i = 0; i < data.orders.length; i++) {
+      sheet.appendRow(data.orders[i]);
+    }
+  }
+  return ContentService.createTextOutput(JSON.stringify({ status: "success" }))
+    .setMimeType(ContentService.MimeType.JSON);
+}`;
+                    navigator.clipboard.writeText(code);
+                    setActionNotice({
+                      type: 'success',
+                      message: 'คัดลอกโค้ด Apps Script เรียบร้อยแล้ว',
+                    });
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-cyan-950 text-cyan-300 border border-cyan-500/40 text-[10px] font-bold flex items-center gap-1 cursor-pointer hover:bg-cyan-900"
+                >
+                  <Copy className="w-3 h-3" />
+                  <span>คัดลอกโค้ด</span>
+                </button>
+              </div>
+
+              <ol className="text-[11px] text-slate-300 space-y-1 list-decimal list-inside">
+                <li>เปิด Google Sheet ของคุณ</li>
+                <li>ไปที่เมนู <strong>ส่วนขยาย (Extensions)</strong> &gt; <strong>Apps Script</strong></li>
+                <li>ลบโค้ดเดิม แล้ววางโค้ดด้านล่างลงไป</li>
+                <li>กด <strong>ทำให้ใช้งานได้ (Deploy)</strong> &gt; <strong>การทำให้ใช้งานได้รายการใหม่ (New deployment)</strong></li>
+                <li>เลือกประเภท <strong>เว็บแอป (Web App)</strong> &gt; ใครที่มีสิทธิ์เข้าถึง: <strong>ทุกคน (Anyone)</strong></li>
+                <li>คัดลอก URL เว็บแอปที่ได้ มาวางในช่อง Webhook ด้านบน</li>
+              </ol>
+
+              <pre className="p-2.5 rounded-lg bg-slate-950 text-cyan-300 font-mono text-[10px] overflow-x-auto border border-slate-800">
+{`function doPost(e) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var data = JSON.parse(e.postData.contents);
+  if (data.headers && sheet.getLastRow() === 0) {
+    sheet.appendRow(data.headers);
+  }
+  if (data.orders && data.orders.length > 0) {
+    for (var i = 0; i < data.orders.length; i++) {
+      sheet.appendRow(data.orders[i]);
+    }
+  }
+  return ContentService.createTextOutput(JSON.stringify({ status: "success" }))
+    .setMimeType(ContentService.MimeType.JSON);
+}`}
+              </pre>
+            </div>
+          )}
+        </div>
+
+        {/* Card 4: One-Click Offline CSV Export */}
+        <div className="bg-[#181230] border border-violet-500/20 rounded-xl p-4.5 space-y-4 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black text-amber-400 flex items-center gap-2">
+                <Download className="w-4 h-4 text-amber-400" />
+                วิธีที่ 3: ดาวน์โหลดไฟล์ CSV ไปเปิดใน Google Sheets
+              </span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40">
+                100% ใช้งานได้ทันที
+              </span>
+            </div>
+
+            <p className="text-[11px] text-violet-200/80 mt-2">
+              ดาวน์โหลดไฟล์ CSV ที่ฟอร์แมตภาษาไทยแบบ UTF-8 BOM อย่างสมบูรณ์ นำไปเปิดใน Google Sheets (File &gt; Import) หรือ Microsoft Excel ได้ทันทีโดยภาษาไทยไม่เพี้ยน
+            </p>
+          </div>
+
+          <div className="pt-4 border-t border-violet-500/20 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <span className="text-xs text-slate-300 font-bold">
+              พร้อมส่งออก: {orders.length} ออเดอร์
+            </span>
+
+            <button
+              type="button"
+              onClick={handleDownloadCsv}
+              className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs shadow-lg flex items-center justify-center gap-2 cursor-pointer transition-all hover:scale-105 active:scale-95"
+            >
+              <Download className="w-4 h-4 stroke-[2.5]" />
+              <span>ดาวน์โหลด CSV ({orders.length} รายการ)</span>
             </button>
           </div>
         </div>
