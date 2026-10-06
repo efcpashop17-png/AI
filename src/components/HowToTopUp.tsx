@@ -180,23 +180,35 @@ export const HowToTopUp: React.FC = () => {
               ติดต่อฝ่ายบริการลูกค้าและแจ้งปัญหา
             </h4>
             <p className="text-xs text-slate-400 font-medium">
-              Line Official: @gamepay_topup | ให้บริการทุกวัน 24 ชม.
+              Line Official: <strong className="text-emerald-400">@820tvyqh</strong> | ให้บริการทุกวัน 24 ชม.
             </p>
           </div>
         </div>
 
-        <button
-          onClick={() => {
-            navigator.clipboard.writeText('@gamepay_topup');
-            setNotification({
-              type: 'success',
-              message: 'คัดลอก Line ID: @gamepay_topup เรียบร้อยแล้ว',
-            });
-          }}
-          className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs shadow-lg shadow-emerald-500/20 whitespace-nowrap cursor-pointer transition-all"
-        >
-          คัดลอก Line ID
-        </button>
+        <div className="flex items-center gap-2">
+          <a
+            href="https://line.me/R/ti/p/@820tvyqh"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs shadow-lg shadow-emerald-500/20 whitespace-nowrap cursor-pointer transition-all inline-flex items-center gap-1.5"
+          >
+            <MessageCircle className="w-4 h-4 stroke-[2.5]" />
+            <span>แอดไลน์ @820tvyqh</span>
+          </a>
+
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText('@820tvyqh');
+              setNotification({
+                type: 'success',
+                message: 'คัดลอก Line ID: @820tvyqh เรียบร้อยแล้ว',
+              });
+            }}
+            className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-black text-xs border border-slate-700 whitespace-nowrap cursor-pointer transition-all"
+          >
+            คัดลอก ID
+          </button>
+        </div>
       </div>
     </div>
   );

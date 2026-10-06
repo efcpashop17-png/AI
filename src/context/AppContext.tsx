@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from 'react';
 import {
   Game,
   GamePackage,
@@ -192,6 +192,7 @@ interface AppContextType {
   customerLogin: (username: string, passcode: string) => boolean;
   customerLogout: () => void;
   downloadDatabaseBackup: () => void;
+  refreshOrders: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -438,6 +439,33 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return () => {
       active = false;
     };
+  }, []);
+
+  const refreshOrders = useCallback(async () => {
+    try {
+      const res = await fetch('/api/data/orders');
+      if (res.ok) {
+        const serverOrders: TopUpOrder[] = await res.json();
+        if (Array.isArray(serverOrders) && serverOrders.length > 0) {
+          setOrders((prev) => {
+            const map = new Map<string, TopUpOrder>();
+            serverOrders.forEach((o) => map.set(o.id, o));
+            prev.forEach((o) => {
+              if (!map.has(o.id)) {
+                map.set(o.id, o);
+              }
+            });
+            const updated = Array.from(map.values());
+            try {
+              localStorage.setItem(LOCAL_STORAGE_ORDERS, JSON.stringify(updated));
+            } catch (_) {}
+            return updated;
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to refresh orders from server', err);
+    }
   }, []);
 
   useEffect(() => {
@@ -2113,6 +2141,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         customerLogin,
         customerLogout,
         downloadDatabaseBackup,
+        refreshOrders,
         soundEnabled,
         toggleSound,
       }}

@@ -22,6 +22,7 @@ import {
   Plus,
   Volume2,
   VolumeX,
+  MessageCircle,
 } from 'lucide-react';
 import { ActiveTab } from '../types';
 import { EFCPALogo } from './EFCPALogo';
@@ -168,6 +169,18 @@ export const Navbar: React.FC = () => {
 
           {/* Action Zone: Cart & Login */}
           <div className="hidden md:flex items-center gap-3">
+            {/* LINE Official Contact Button */}
+            <a
+              href="https://line.me/R/ti/p/@820tvyqh"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-500/40 text-emerald-300 hover:text-emerald-200 font-bold text-xs transition-all shadow-[0_0_12px_rgba(16,185,129,0.25)] cursor-pointer"
+              title="ติดต่อ Line Official: @820tvyqh"
+            >
+              <MessageCircle className="w-3.5 h-3.5 text-emerald-400 stroke-[2.5]" />
+              <span>LINE: @820tvyqh</span>
+            </a>
+
             {/* CART BUTTON with Glassmorphism */}
             <button
               onClick={() => setIsCartOpen(true)}
@@ -345,6 +358,22 @@ export const Navbar: React.FC = () => {
               </span>
             )}
           </button>
+
+          {/* LINE Contact Mobile Button */}
+          <a
+            href="https://line.me/R/ti/p/@820tvyqh"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full text-left px-4 py-2.5 rounded-xl text-sm font-bold flex items-center justify-between text-emerald-300 bg-emerald-950/40 border border-emerald-500/30"
+          >
+            <span className="flex items-center gap-2">
+              <MessageCircle className="w-4 h-4 text-emerald-400 stroke-[2.5]" />
+              <span>ติดต่อ Line Official</span>
+            </span>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-900/80 text-emerald-200 font-mono font-bold">
+              @820tvyqh
+            </span>
+          </a>
 
           <button
             onClick={() => {

@@ -317,19 +317,30 @@ const MainContent: React.FC = () => {
 
               <div className="pt-2">
                 <span className="text-[11px] text-violet-400/80 block mb-1">ติดต่อฝ่ายบริการลูกค้า 24 ชม.:</span>
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText('@gamepay_topup');
-                    setNotification({
-                      type: 'success',
-                      message: 'คัดลอก Line ID: @gamepay_topup เรียบร้อยแล้ว',
-                    });
-                  }}
-                  className="flex items-center gap-1.5 text-xs font-bold text-emerald-400 hover:text-emerald-300 bg-emerald-950/40 px-3 py-1.5 rounded-lg border border-emerald-500/30 cursor-pointer"
-                >
-                  <MessageCircle className="w-3.5 h-3.5" />
-                  <span>Line: @gamepay_topup (คลิกเพื่อคัดลอก)</span>
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <a
+                    href="https://line.me/R/ti/p/@820tvyqh"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-xs font-bold text-emerald-400 hover:text-emerald-300 bg-emerald-950/40 hover:bg-emerald-900/60 px-3 py-1.5 rounded-lg border border-emerald-500/30 cursor-pointer transition-colors"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5" />
+                    <span>LINE: @820tvyqh (คลิกเพิ่มเพื่อน)</span>
+                  </a>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText('@820tvyqh');
+                      setNotification({
+                        type: 'success',
+                        message: 'คัดลอก Line ID: @820tvyqh เรียบร้อยแล้ว',
+                      });
+                    }}
+                    className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-bold border border-slate-700 cursor-pointer"
+                    title="คัดลอกไอดีไลน์"
+                  >
+                    คัดลอก ID
+                  </button>
+                </div>
               </div>
             </div>
           </div>

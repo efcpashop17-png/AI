@@ -105,7 +105,40 @@ export const AdminDashboard: React.FC = () => {
     setIsAdminLoginModalOpen,
     setActiveTab,
     setSelectedOrderForPackagePopup,
+    refreshOrders,
   } = useApp();
+
+  // Auto-Refresh state for orders list (30 seconds real-time incoming orders)
+  const [autoRefreshOrders, setAutoRefreshOrders] = useState<boolean>(true);
+  const [refreshCountdown, setRefreshCountdown] = useState<number>(30);
+  const [isManualRefreshing, setIsManualRefreshing] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!autoRefreshOrders) return;
+
+    const timer = setInterval(() => {
+      setRefreshCountdown((prev) => {
+        if (prev <= 1) {
+          refreshOrders();
+          return 30;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [autoRefreshOrders, refreshOrders]);
+
+  const handleManualRefreshOrders = async () => {
+    setIsManualRefreshing(true);
+    await refreshOrders();
+    setRefreshCountdown(30);
+    setNotification({
+      type: 'info',
+      message: 'อัปเดตรายการคำสั่งซื้อล่าสุดเรียบร้อย',
+    });
+    setTimeout(() => setIsManualRefreshing(false), 500);
+  };
 
   // Login form state for lock screen
   const [loginUsername, setLoginUsername] = useState('Arm');
@@ -1337,41 +1370,85 @@ export const AdminDashboard: React.FC = () => {
       {/* TAB 2: ORDERS MANAGEMENT */}
       {adminTab === 'orders' && (
         <div className="space-y-6">
-          {/* Filter Bar - Solid, Clear */}
-          <div className="p-4 sm:p-5 rounded-2xl bg-[#141928] border-2 border-slate-700/80 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-md">
-            <div className="relative w-full sm:w-80">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-amber-400 stroke-[2.5]" />
-              <input
-                type="text"
-                value={orderSearch}
-                onChange={(e) => setOrderSearch(e.target.value)}
-                placeholder="ค้นหา Order ID, UID, ชื่อเกม..."
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#0b0e17] border-2 border-slate-700 text-white font-bold text-xs outline-none focus:border-amber-400 transition-colors"
-              />
+          {/* Filter Bar with Auto-Refresh Toggle Switch */}
+          <div className="p-4 sm:p-5 rounded-2xl bg-[#141928] border-2 border-slate-700/80 flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-4 shadow-md">
+            <div className="flex flex-col sm:flex-row items-center gap-3 flex-1">
+              <div className="relative w-full sm:w-72">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-amber-400 stroke-[2.5]" />
+                <input
+                  type="text"
+                  value={orderSearch}
+                  onChange={(e) => setOrderSearch(e.target.value)}
+                  placeholder="ค้นหา Order ID, UID, ชื่อเกม..."
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#0b0e17] border-2 border-slate-700 text-white font-bold text-xs outline-none focus:border-amber-400 transition-colors"
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto">
+                {['all', 'pending_payment', 'verifying', 'processing', 'completed'].map((st) => (
+                  <button
+                    key={st}
+                    onClick={() => setOrderStatusFilter(st)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                      orderStatusFilter === st
+                        ? 'bg-amber-400 text-slate-950 border-2 border-amber-300 shadow-sm'
+                        : 'bg-[#182032] text-slate-200 hover:text-white hover:bg-[#202b42] border-2 border-slate-700'
+                    }`}
+                  >
+                    {st === 'all'
+                      ? 'ทั้งหมด'
+                      : st === 'pending_payment'
+                      ? 'รอชำระ'
+                      : st === 'verifying'
+                      ? 'ตรวจสลิป'
+                      : st === 'processing'
+                      ? 'กำลังเติม'
+                      : 'สำเร็จแล้ว'}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-              {['all', 'pending_payment', 'verifying', 'processing', 'completed'].map((st) => (
-                <button
-                  key={st}
-                  onClick={() => setOrderStatusFilter(st)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
-                    orderStatusFilter === st
-                      ? 'bg-amber-400 text-slate-950 border-2 border-amber-300 shadow-sm'
-                      : 'bg-[#182032] text-slate-200 hover:text-white hover:bg-[#202b42] border-2 border-slate-700'
-                  }`}
-                >
-                  {st === 'all'
-                    ? 'ทั้งหมด'
-                    : st === 'pending_payment'
-                    ? 'รอชำระ'
-                    : st === 'verifying'
-                    ? 'ตรวจสลิป'
-                    : st === 'processing'
-                    ? 'กำลังเติม'
-                    : 'สำเร็จแล้ว'}
-                </button>
-              ))}
+            {/* Auto-Refresh Toggle Switch (30 seconds) & Manual Refresh Action */}
+            <div className="flex items-center justify-between sm:justify-end gap-3 pt-3 xl:pt-0 border-t xl:border-t-0 border-slate-700/80">
+              <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-[#0b0e17] border-2 border-slate-700 shadow-sm">
+                <label className="relative inline-flex items-center cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={autoRefreshOrders}
+                    onChange={(e) => {
+                      setAutoRefreshOrders(e.target.checked);
+                      setRefreshCountdown(30);
+                    }}
+                    className="sr-only peer"
+                  />
+                  <div className="w-10 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500 shadow-inner"></div>
+                </label>
+                <div className="text-left">
+                  <span className="text-[11px] font-black text-white flex items-center gap-1.5 leading-tight">
+                    {autoRefreshOrders ? (
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+                    ) : (
+                      <span className="w-2 h-2 rounded-full bg-slate-600 shrink-0"></span>
+                    )}
+                    <span>ออโต้รีเฟรช (30s)</span>
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-mono block leading-tight">
+                    {autoRefreshOrders ? `อัปเดตใน ${refreshCountdown} วินาที` : 'ปิดใช้งาน'}
+                  </span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleManualRefreshOrders}
+                disabled={isManualRefreshing}
+                title="กดเพื่อรีเฟรชรายการคำสั่งซื้อทันที"
+                className="px-3.5 py-2 rounded-xl bg-[#182032] hover:bg-amber-400 text-slate-200 hover:text-slate-950 border-2 border-slate-700 hover:border-amber-300 transition-all cursor-pointer flex items-center gap-1.5 text-xs font-black shadow"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isManualRefreshing ? 'animate-spin text-amber-400' : ''}`} />
+                <span className="hidden sm:inline">รีเฟรชทันที</span>
+              </button>
             </div>
           </div>
 
