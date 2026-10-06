@@ -409,71 +409,48 @@ app.get("/download-project.zip", (req, res) => {
   }
 });
 
-const distHtml = path.join(__dirname, "dist", "index.html");
+const distPath = path.join(__dirname, "dist");
+const distHtml = path.join(distPath, "index.html");
 
-// Only run Vite dev server in development when dist does NOT exist
-const isDev = process.env.NODE_ENV === "development" && !fs.existsSync(distHtml);
-
-// Serve static frontend files or mount Vite in development
-if (isDev) {
-  const { createServer: createViteServer } = await import("vite");
-  const vite = await createViteServer({
-    server: { middlewareMode: true },
-    appType: "spa",
-  });
-  app.use(vite.middlewares);
-
-  app.get("*", async (req, res, next) => {
-    if (req.originalUrl.startsWith("/api/")) return next();
-    try {
-      const indexPath = path.join(process.cwd(), "index.html");
-      let template = fs.readFileSync(indexPath, "utf-8");
-      template = await vite.transformIndexHtml(req.originalUrl, template);
-      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate, max-age=0");
-      res.setHeader("Pragma", "no-cache");
-      res.setHeader("Expires", "0");
-      res.status(200).set({ "Content-Type": "text/html" }).end(template);
-    } catch (e) {
-      vite.ssrFixStacktrace(e);
-      next(e);
-    }
-  });
-} else {
-  if (fs.existsSync(path.join(__dirname, "dist"))) {
-    app.use(
-      express.static(path.join(__dirname, "dist"), {
-        setHeaders: (res, filePath) => {
-          if (filePath.endsWith("index.html")) {
-            res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-            res.setHeader("Pragma", "no-cache");
-            res.setHeader("Expires", "0");
-          } else if (filePath.includes("/assets/")) {
-            res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-          }
-        },
-      })
-    );
-  }
-  app.use(express.static(path.join(__dirname, "public")));
-  app.use("/public", express.static(path.join(__dirname, "public")));
-  if (fs.existsSync(path.join(__dirname, "dist", "public"))) {
-    app.use("/public", express.static(path.join(__dirname, "dist", "public")));
-  }
-
-  // Fallback to index.html for all SPA routes with no-cache headers
-  app.get("*", (req, res) => {
-    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-    res.setHeader("Pragma", "no-cache");
-    res.setHeader("Expires", "0");
-    if (fs.existsSync(distHtml)) {
-      res.sendFile(distHtml);
-    } else if (fs.existsSync(path.join(__dirname, "index.html"))) {
-      res.sendFile(path.join(__dirname, "index.html"));
-    } else {
-      res.status(200).send("<!DOCTYPE html><html><head><title>EF CPA Shop</title></head><body><h1>EF CPA Shop</h1><p>Starting up... please refresh in a moment.</p></body></html>");
-    }
-  });
+// Serve static frontend files from pre-built dist
+if (fs.existsSync(distPath)) {
+  app.use(
+    express.static(distPath, {
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith("index.html")) {
+          res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate, max-age=0");
+          res.setHeader("Pragma", "no-cache");
+          res.setHeader("Expires", "0");
+        } else if (filePath.includes("/assets/")) {
+          res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+        }
+      },
+    })
+  );
 }
+
+app.use(express.static(path.join(__dirname, "public")));
+app.use("/public", express.static(path.join(__dirname, "public")));
+if (fs.existsSync(path.join(__dirname, "dist", "public"))) {
+  app.use("/public", express.static(path.join(__dirname, "dist", "public")));
+}
+
+// Fallback to index.html for all SPA routes with no-cache headers
+app.get("*", (req, res) => {
+  if (req.originalUrl.startsWith("/api/")) {
+    return res.status(404).json({ error: "API endpoint not found" });
+  }
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate, max-age=0");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  if (fs.existsSync(distHtml)) {
+    res.sendFile(distHtml);
+  } else if (fs.existsSync(path.join(__dirname, "index.html"))) {
+    res.sendFile(path.join(__dirname, "index.html"));
+  } else {
+    res.status(200).send("<!DOCTYPE html><html><head><title>EF CPA Shop</title></head><body><h1>EF CPA Shop</h1><p>Starting up... please refresh in a moment.</p></body></html>");
+  }
+});
 
 // Global error handlers
 process.on("uncaughtException", (err) => {
