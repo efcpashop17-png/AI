@@ -389,7 +389,7 @@ const distPath = path.join(process.cwd(), "dist");
 const distHtml = path.join(distPath, "index.html");
 
 async function startServer() {
-  const isDev = process.env.NODE_ENV !== "production";
+  const isDev = process.env.NODE_ENV === "development" && !fs.existsSync(distHtml);
 
   if (isDev) {
     const { createServer: createViteServer } = await import("vite");

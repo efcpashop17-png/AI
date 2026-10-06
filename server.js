@@ -411,8 +411,11 @@ app.get("/download-project.zip", (req, res) => {
 
 const distHtml = path.join(__dirname, "dist", "index.html");
 
+// Only run Vite dev server in development when dist does NOT exist
+const isDev = process.env.NODE_ENV === "development" && !fs.existsSync(distHtml);
+
 // Serve static frontend files or mount Vite in development
-if (process.env.NODE_ENV !== "production") {
+if (isDev) {
   const { createServer: createViteServer } = await import("vite");
   const vite = await createViteServer({
     server: { middlewareMode: true },
