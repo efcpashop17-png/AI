@@ -12,6 +12,15 @@ const EASYSLIP_TOKEN = process.env.EASYSLIP_API_KEY || 'c16cec69-0221-40c7-a2e1-
 app.use(express.json({ limit: "25mb" }));
 app.use(express.urlencoded({ extended: true, limit: "25mb" }));
 
+// Prevent all HTTP caching for API routes across devices & LiteSpeed/Cloudflare
+app.use("/api", (_req: Request, res: Response, next) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  res.setHeader("Surrogate-Control", "no-store");
+  next();
+});
+
 // Health Check Endpoint
 app.get("/api/health", (_req: Request, res: Response) => {
   res.json({
@@ -222,7 +231,10 @@ app.post("/api/data/games", (req: Request, res: Response) => {
 
     // 1. Support single package update: { gameId, packageId, updates }
     if (incoming && incoming.gameId && incoming.packageId && incoming.updates) {
-      const gIndex = currentGames.findIndex((g: any) => g.id === incoming.gameId);
+      let gIndex = currentGames.findIndex((g: any) => g.id === incoming.gameId);
+      if (gIndex === -1) {
+        gIndex = currentGames.findIndex((g: any) => g.packages && g.packages.some((p: any) => p.id === incoming.packageId));
+      }
       if (gIndex >= 0) {
         currentGames[gIndex].packages = currentGames[gIndex].packages.map((p: any) => 
           p.id === incoming.packageId ? { ...p, ...incoming.updates } : p

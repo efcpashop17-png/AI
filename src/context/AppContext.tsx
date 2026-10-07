@@ -194,6 +194,7 @@ interface AppContextType {
   downloadDatabaseBackup: () => void;
   restoreDatabaseBackup: (backupData: any) => Promise<{ success: boolean; orderCount: number; customerCount: number }>;
   refreshOrders: () => Promise<void>;
+  forceSyncAllDevices: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -409,6 +410,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           } catch (_) {}
           return merged;
         });
+      } else if (games && games.length > 0) {
+        // If server database is clean or empty, seed local games to server disk
+        saveGamesToServer(games);
       }
 
       if (serverData.deletedOrderIds && Array.isArray(serverData.deletedOrderIds)) {
@@ -715,11 +719,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     window.addEventListener('focus', syncAcrossDevices);
-    const syncInterval = setInterval(syncAcrossDevices, 6000); // Poll every 6 seconds for instant cross-device updates
+    document.addEventListener('visibilitychange', syncAcrossDevices);
+    const syncInterval = setInterval(syncAcrossDevices, 4000); // Poll every 4 seconds for instant cross-device updates
 
     return () => {
       active = false;
       window.removeEventListener('focus', syncAcrossDevices);
+      document.removeEventListener('visibilitychange', syncAcrossDevices);
       clearInterval(syncInterval);
     };
   }, []);
@@ -1503,12 +1509,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       console.warn('localStorage quota exceeded:', err);
     }
 
-    // Save directly and permanently to server disk (lightweight 100-byte update)
+    // Save directly and permanently to server disk (updates all devices immediately)
+    saveGamesToServer(updatedGames);
     saveSinglePackageToServer(gameId, packageId, updates);
 
     setNotification({
       type: 'success',
-      message: 'บันทึกราคาและข้อมูลแพ็กเกจสำเร็จเรียบร้อย (บันทึกถาวร)',
+      message: 'บันทึกราคาและข้อมูลแพ็กเกจสำเร็จเรียบร้อย (ซิงค์ทุกเครื่องทันที)',
     });
   };
 
@@ -1534,11 +1541,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       console.warn('localStorage quota exceeded:', err);
     }
 
+    saveGamesToServer(updatedGames);
     addPackageToServer(gameId, newPkg);
 
     setNotification({
       type: 'success',
-      message: `เพิ่มแพ็กเกจ "${pkg.name}" ให้กับเกมสำเร็จ (บันทึกถาวร)`,
+      message: `เพิ่มแพ็กเกจ "${pkg.name}" ให้กับเกมสำเร็จ (ซิงค์ทุกเครื่องทันที)`,
     });
   };
 
@@ -1560,6 +1568,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       console.warn('localStorage quota exceeded:', err);
     }
 
+    saveGamesToServer(updatedGames);
     deletePackageFromServer(gameId, packageId);
 
     setNotification({
@@ -2202,6 +2211,29 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
+  const forceSyncAllDevices = async () => {
+    try {
+      lastLocalGameUpdateRef.current = 0;
+      await saveGamesToServer(games);
+      const serverData = await fetchServerData();
+      if (serverData?.games && serverData.games.length > 0) {
+        setGames(serverData.games);
+        try {
+          localStorage.setItem(LOCAL_STORAGE_GAMES, JSON.stringify(serverData.games));
+        } catch (_) {}
+      }
+      setNotification({
+        type: 'success',
+        message: 'ซิงค์ข้อมูลราคาและรูปภาพขึ้นเซิร์ฟเวอร์เรียบร้อย ทุกเครื่องจะอัปเดตตรงกันทันที!',
+      });
+    } catch (e) {
+      setNotification({
+        type: 'error',
+        message: 'เกิดข้อผิดพลาดในการซิงค์ข้อมูลกับเซิร์ฟเวอร์',
+      });
+    }
+  };
+
   const updatePaymentConfig = (newConfig: Partial<PaymentConfig>) => {
     setPaymentConfig((prev) => {
       const updated = { ...prev, ...newConfig };
@@ -2300,6 +2332,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         downloadDatabaseBackup,
         restoreDatabaseBackup,
         refreshOrders,
+        forceSyncAllDevices,
         soundEnabled,
         toggleSound,
       }}

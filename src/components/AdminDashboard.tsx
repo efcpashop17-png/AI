@@ -107,7 +107,15 @@ export const AdminDashboard: React.FC = () => {
     setActiveTab,
     setSelectedOrderForPackagePopup,
     refreshOrders,
+    forceSyncAllDevices,
   } = useApp();
+
+  const [isSyncingAll, setIsSyncingAll] = useState(false);
+  const handleForceSyncAll = async () => {
+    setIsSyncingAll(true);
+    await forceSyncAllDevices();
+    setIsSyncingAll(false);
+  };
 
   const restoreFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -992,6 +1000,17 @@ export const AdminDashboard: React.FC = () => {
             <span>{isExportingSheet ? 'กำลังซิงค์...' : 'Google Sheets'}</span>
           </button>
 
+          {/* Force Sync All Devices Button */}
+          <button
+            onClick={handleForceSyncAll}
+            disabled={isSyncingAll}
+            title="ส่งข้อมูลราคาและรูปภาพปัจจุบันขึ้นเซิร์ฟเวอร์ทันที เพื่อให้อีกเครื่อง/มือถืออัปเดตตรงกัน 100%"
+            className="px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-slate-950 font-black text-xs border border-amber-300 shadow flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 stroke-[2.5] ${isSyncingAll ? 'animate-spin' : ''}`} />
+            <span>{isSyncingAll ? 'กำลังซิงค์ทุกเครื่อง...' : 'ซิงค์ราคาทุกเครื่องทันที'}</span>
+          </button>
+
           <button
             onClick={adminLogout}
             className="px-3 py-2.5 rounded-xl bg-rose-950/70 hover:bg-rose-900 border border-rose-700/60 text-xs font-black text-rose-200 hover:text-white flex items-center gap-1.5 transition-all cursor-pointer"
@@ -1177,16 +1196,29 @@ export const AdminDashboard: React.FC = () => {
                 </p>
               </div>
 
-              <button
-                onClick={() => {
-                  setNewPkgInGameItem(currentGame?.packages[0]?.inGameItem || 'เหรียญ');
-                  setIsAddPackageModalOpen(true);
-                }}
-                className="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs sm:text-sm flex items-center gap-1.5 border-2 border-amber-300 shadow-md shadow-amber-400/20 whitespace-nowrap self-start sm:self-auto cursor-pointer"
-              >
-                <Plus className="w-4 h-4 stroke-[2.5]" />
-                <span>เพิ่มแพ็กเกจใหม่ให้กับเกมนี้</span>
-              </button>
+              <div className="flex items-center gap-2 self-start sm:self-auto">
+                <button
+                  type="button"
+                  onClick={handleForceSyncAll}
+                  disabled={isSyncingAll}
+                  title="กดปุ่มนี้เพื่อส่งข้อมูลราคาและรูปภาพทั้งหมดขึ้นเซิร์ฟเวอร์ ให้โทรศัพท์และเครื่องอื่นเห็นตรงกันทันที"
+                  className="px-3.5 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-black text-xs sm:text-sm flex items-center gap-1.5 border border-cyan-400 shadow cursor-pointer whitespace-nowrap"
+                >
+                  <RefreshCw className={`w-4 h-4 stroke-[2.5] ${isSyncingAll ? 'animate-spin' : ''}`} />
+                  <span>{isSyncingAll ? 'กำลังซิงค์...' : 'ซิงค์ราคาทุกเครื่อง'}</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setNewPkgInGameItem(currentGame?.packages[0]?.inGameItem || 'เหรียญ');
+                    setIsAddPackageModalOpen(true);
+                  }}
+                  className="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs sm:text-sm flex items-center gap-1.5 border-2 border-amber-300 shadow-md shadow-amber-400/20 whitespace-nowrap cursor-pointer"
+                >
+                  <Plus className="w-4 h-4 stroke-[2.5]" />
+                  <span>เพิ่มแพ็กเกจใหม่ให้กับเกมนี้</span>
+                </button>
+              </div>
             </div>
 
             {/* Games Pills */}
@@ -2220,11 +2252,24 @@ export const AdminDashboard: React.FC = () => {
                 </p>
               </div>
 
-              <div className="px-4 py-2.5 rounded-2xl bg-[#0b0e17] border border-slate-700 text-right">
-                <span className="text-[11px] text-slate-400 block font-bold">เกมทั้งหมดในระบบ</span>
-                <span className="text-base font-black text-amber-400 font-mono">
-                  {games.length} เกม
-                </span>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleForceSyncAll}
+                  disabled={isSyncingAll}
+                  title="ซิงค์รูปภาพเกมทั้งหมดขึ้นเซิร์ฟเวอร์ ให้ทุกเครื่องโหลดรูปภาพตรงกันทันที"
+                  className="px-3.5 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-black text-xs sm:text-sm flex items-center gap-1.5 border border-cyan-400 shadow cursor-pointer whitespace-nowrap"
+                >
+                  <RefreshCw className={`w-4 h-4 stroke-[2.5] ${isSyncingAll ? 'animate-spin' : ''}`} />
+                  <span>{isSyncingAll ? 'กำลังซิงค์...' : 'ซิงค์รูปภาพทุกเครื่อง'}</span>
+                </button>
+
+                <div className="px-4 py-2.5 rounded-2xl bg-[#0b0e17] border border-slate-700 text-right">
+                  <span className="text-[11px] text-slate-400 block font-bold">เกมทั้งหมดในระบบ</span>
+                  <span className="text-base font-black text-amber-400 font-mono">
+                    {games.length} เกม
+                  </span>
+                </div>
               </div>
             </div>
           </div>

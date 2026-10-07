@@ -10,7 +10,7 @@ export interface ServerDataResponse {
   timestamp?: number;
 }
 
-// Fetch all persistent data from the server
+// Fetch all persistent data from the server (Cache-busted for real-time cross-device sync)
 export async function fetchServerData(): Promise<{
   orders: TopUpOrder[];
   deletedOrderIds: string[];
@@ -19,7 +19,13 @@ export async function fetchServerData(): Promise<{
   settings?: { paymentConfig?: PaymentConfig } | null;
 } | null> {
   try {
-    const res = await fetch('/api/data/all');
+    const res = await fetch(`/api/data/all?_t=${Date.now()}`, {
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+      },
+    });
     if (!res.ok) return null;
     const data: ServerDataResponse = await res.json();
     return {
