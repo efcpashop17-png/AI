@@ -3,6 +3,7 @@ import { TopUpOrder, CustomerUser, PaymentConfig, Game } from '../types';
 export interface ServerDataResponse {
   success: boolean;
   orders: TopUpOrder[];
+  deletedOrderIds?: string[];
   customers: CustomerUser[];
   games?: Game[] | null;
   settings?: { paymentConfig?: PaymentConfig } | null;
@@ -12,6 +13,7 @@ export interface ServerDataResponse {
 // Fetch all persistent data from the server
 export async function fetchServerData(): Promise<{
   orders: TopUpOrder[];
+  deletedOrderIds: string[];
   customers: CustomerUser[];
   games?: Game[] | null;
   settings?: { paymentConfig?: PaymentConfig } | null;
@@ -22,6 +24,7 @@ export async function fetchServerData(): Promise<{
     const data: ServerDataResponse = await res.json();
     return {
       orders: Array.isArray(data.orders) ? data.orders : [],
+      deletedOrderIds: Array.isArray(data.deletedOrderIds) ? data.deletedOrderIds : [],
       customers: Array.isArray(data.customers) ? data.customers : [],
       games: Array.isArray(data.games) && data.games.length > 0 ? data.games : null,
       settings: data.settings || null,

@@ -60,6 +60,7 @@ app.post("/api/verify-slip", async (req: Request, res: Response) => {
 // ==========================================
 const DATA_DIR = path.join(process.cwd(), "data");
 const ORDERS_FILE = path.join(DATA_DIR, "orders.json");
+const DELETED_ORDERS_FILE = path.join(DATA_DIR, "deleted_order_ids.json");
 const CUSTOMERS_FILE = path.join(DATA_DIR, "customers.json");
 const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
 const GAMES_FILE = path.join(DATA_DIR, "games.json");
@@ -184,17 +185,29 @@ function createBackupSnapshot(prefix: string, data: any) {
 
 app.get("/api/data/all", (_req: Request, res: Response) => {
   const orders = readJsonFile(ORDERS_FILE, []);
+  const deletedOrderIds = readJsonFile(DELETED_ORDERS_FILE, []);
+  const deletedSet = new Set(deletedOrderIds);
+  const activeOrders = orders.filter((o: any) => !deletedSet.has(o.id));
   const customers = readJsonFile(CUSTOMERS_FILE, []);
   const settings = readJsonFile(SETTINGS_FILE, null);
   const games = readJsonFile(GAMES_FILE, null);
   res.json({
     success: true,
-    orders,
+    orders: activeOrders,
+    deletedOrderIds,
     customers,
     settings,
     games,
     timestamp: Date.now(),
   });
+});
+
+app.get("/api/data/orders", (_req: Request, res: Response) => {
+  const orders = readJsonFile(ORDERS_FILE, []);
+  const deletedOrderIds = readJsonFile(DELETED_ORDERS_FILE, []);
+  const deletedSet = new Set(deletedOrderIds);
+  const activeOrders = orders.filter((o: any) => !deletedSet.has(o.id));
+  res.json(activeOrders);
 });
 
 app.get("/api/data/games", (_req: Request, res: Response) => {
@@ -291,10 +304,15 @@ app.post("/api/data/orders", (req: Request, res: Response) => {
   try {
     const incoming = req.body;
     let currentOrders = readJsonFile(ORDERS_FILE, []);
+    const deletedOrderIds = readJsonFile(DELETED_ORDERS_FILE, []);
+    const deletedSet = new Set(deletedOrderIds);
     const items = Array.isArray(incoming) ? incoming : (incoming.order ? [incoming.order] : [incoming]);
 
     for (const item of items) {
       if (!item || !item.id) continue;
+      // Do NOT allow resurrection of permanently deleted orders
+      if (deletedSet.has(item.id)) continue;
+
       const index = currentOrders.findIndex((o: any) => o.id === item.id);
       if (index >= 0) {
         currentOrders[index] = { ...currentOrders[index], ...item };
@@ -317,7 +335,18 @@ app.delete("/api/data/orders/:id", (req: Request, res: Response) => {
     createBackupSnapshot("orders_before_admin_delete", currentOrders);
     currentOrders = currentOrders.filter((o: any) => o.id !== id);
     writeJsonFile(ORDERS_FILE, currentOrders);
-    res.json({ success: true, count: currentOrders.length });
+
+    // Record tombstone so no stale client/sync can ever bring it back
+    let deletedOrderIds = readJsonFile(DELETED_ORDERS_FILE, []);
+    if (!deletedOrderIds.includes(id)) {
+      deletedOrderIds.push(id);
+      if (deletedOrderIds.length > 5000) {
+        deletedOrderIds = deletedOrderIds.slice(-5000);
+      }
+      writeJsonFile(DELETED_ORDERS_FILE, deletedOrderIds);
+    }
+
+    res.json({ success: true, count: currentOrders.length, deletedId: id });
   } catch (err) {
     res.status(500).json({ success: false, error: String(err) });
   }

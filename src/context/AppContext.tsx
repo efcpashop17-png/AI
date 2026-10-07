@@ -192,6 +192,7 @@ interface AppContextType {
   customerLogin: (username: string, passcode: string) => boolean;
   customerLogout: () => void;
   downloadDatabaseBackup: () => void;
+  restoreDatabaseBackup: (backupData: any) => Promise<{ success: boolean; orderCount: number; customerCount: number }>;
   refreshOrders: () => Promise<void>;
 }
 
@@ -199,6 +200,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const LOCAL_STORAGE_GAMES = 'gamepay_games_v2';
 const LOCAL_STORAGE_ORDERS = 'gamepay_orders_v2';
+const LOCAL_STORAGE_DELETED_ORDERS = 'gamepay_deleted_orders_v2';
 const LOCAL_STORAGE_DEALERS = 'gamepay_dealers_v2';
 const LOCAL_STORAGE_WEBHOOK = 'gamepay_webhook_v2';
 const LOCAL_STORAGE_CART = 'gamepay_cart_v2';
@@ -255,24 +257,47 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return INITIAL_GAMES;
   });
 
+  // Track permanently deleted order IDs to prevent resurrection from stale tabs/syncs
+  const [deletedOrderIds, setDeletedOrderIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_DELETED_ORDERS);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (_) {}
+    return [];
+  });
+
   // Load Orders with auto-migration to shop notation (e.g. 12800x10 5700x10 3250x2)
   const [orders, setOrders] = useState<TopUpOrder[]>(() => {
     try {
       const saved = localStorage.getItem(LOCAL_STORAGE_ORDERS);
+      const savedDeleted = localStorage.getItem(LOCAL_STORAGE_DELETED_ORDERS);
+      const deletedSet = new Set<string>();
+      if (savedDeleted) {
+        try {
+          const parsedDeleted = JSON.parse(savedDeleted);
+          if (Array.isArray(parsedDeleted)) parsedDeleted.forEach((id: string) => deletedSet.add(id));
+        } catch (_) {}
+      }
+
       if (saved) {
         const parsed: TopUpOrder[] = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return parsed.map((o) => {
-            const notation = formatOrderPackagesNotation(o);
-            if (notation && (o.packageName?.includes('และอีก') || o.gameName?.includes('และอื่นๆ'))) {
-              return {
-                ...o,
-                packageName: notation,
-                gameName: o.gameName.replace(/ และอื่นๆ.*$/, ''),
-              };
-            }
-            return o;
-          });
+          return parsed
+            .filter((o) => !deletedSet.has(o.id))
+            .map((o) => {
+              const notation = formatOrderPackagesNotation(o);
+              if (notation && (o.packageName?.includes('และอีก') || o.gameName?.includes('และอื่นๆ'))) {
+                return {
+                  ...o,
+                  packageName: notation,
+                  gameName: o.gameName.replace(/ และอื่นๆ.*$/, ''),
+                };
+              }
+              return o;
+            });
         }
       }
     } catch (e) {
@@ -386,22 +411,66 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         });
       }
 
+      if (serverData.deletedOrderIds && Array.isArray(serverData.deletedOrderIds)) {
+        setDeletedOrderIds((prev) => {
+          const merged = Array.from(new Set([...prev, ...serverData.deletedOrderIds]));
+          try {
+            localStorage.setItem(LOCAL_STORAGE_DELETED_ORDERS, JSON.stringify(merged));
+          } catch (_) {}
+          return merged;
+        });
+      }
+
       if (serverData.orders && serverData.orders.length > 0) {
         setOrders((prev) => {
+          const deletedSet = new Set<string>();
+          try {
+            const raw = localStorage.getItem(LOCAL_STORAGE_DELETED_ORDERS);
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              if (Array.isArray(parsed)) parsed.forEach((id: string) => deletedSet.add(id));
+            }
+          } catch (_) {}
+          if (serverData.deletedOrderIds) {
+            serverData.deletedOrderIds.forEach((id: string) => deletedSet.add(id));
+          }
+
           const map = new Map<string, TopUpOrder>();
-          // Server disk is permanent truth
-          serverData.orders.forEach((o) => map.set(o.id, o));
-          // Preserve any newly placed local orders
+          // Server disk is permanent truth (excluding permanently deleted)
+          serverData.orders
+            .filter((o) => !deletedSet.has(o.id))
+            .forEach((o) => map.set(o.id, o));
+
+          // Only keep local orders if NOT deleted and created within the last 20 seconds
+          const now = Date.now();
           prev.forEach((o) => {
-            if (!map.has(o.id)) {
-              map.set(o.id, o);
-              saveOrderToServer(o);
+            if (!map.has(o.id) && !deletedSet.has(o.id)) {
+              const orderTime = new Date(o.createdAt).getTime();
+              if (now - orderTime < 20000) {
+                map.set(o.id, o);
+                saveOrderToServer(o);
+              }
             }
           });
-          return Array.from(map.values());
+          const merged = Array.from(map.values());
+          try {
+            localStorage.setItem(LOCAL_STORAGE_ORDERS, JSON.stringify(merged));
+          } catch (_) {}
+          return merged;
         });
       } else if (orders.length > 0) {
-        saveOrdersBatchToServer(orders);
+        const deletedSet = new Set<string>();
+        try {
+          const raw = localStorage.getItem(LOCAL_STORAGE_DELETED_ORDERS);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) parsed.forEach((id: string) => deletedSet.add(id));
+          }
+        } catch (_) {}
+        const nonDeleted = orders.filter((o) => !deletedSet.has(o.id));
+        if (nonDeleted.length > 0) {
+          saveOrdersBatchToServer(nonDeleted);
+        }
       }
 
       if (serverData.customers && serverData.customers.length > 0) {
@@ -446,13 +515,30 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const res = await fetch('/api/data/orders');
       if (res.ok) {
         const serverOrders: TopUpOrder[] = await res.json();
-        if (Array.isArray(serverOrders) && serverOrders.length > 0) {
+        if (Array.isArray(serverOrders)) {
+          const deletedSet = new Set<string>();
+          try {
+            const raw = localStorage.getItem(LOCAL_STORAGE_DELETED_ORDERS);
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              if (Array.isArray(parsed)) parsed.forEach((id: string) => deletedSet.add(id));
+            }
+          } catch (_) {}
+
+          const activeServerOrders = serverOrders.filter((o) => !deletedSet.has(o.id));
+
           setOrders((prev) => {
             const map = new Map<string, TopUpOrder>();
-            serverOrders.forEach((o) => map.set(o.id, o));
+            activeServerOrders.forEach((o) => map.set(o.id, o));
+
+            // Only preserve brand-new local orders placed in last 20 seconds that haven't hit server yet
+            const now = Date.now();
             prev.forEach((o) => {
-              if (!map.has(o.id)) {
-                map.set(o.id, o);
+              if (!map.has(o.id) && !deletedSet.has(o.id)) {
+                const orderTime = new Date(o.createdAt).getTime();
+                if (now - orderTime < 20000) {
+                  map.set(o.id, o);
+                }
               }
             });
             const updated = Array.from(map.values());
@@ -642,7 +728,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     try {
       localStorage.setItem(LOCAL_STORAGE_ORDERS, JSON.stringify(orders));
       if (orders && orders.length > 0) {
-        saveOrdersBatchToServer(orders);
+        let deletedSet = new Set<string>();
+        try {
+          const raw = localStorage.getItem(LOCAL_STORAGE_DELETED_ORDERS);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) parsed.forEach((id: string) => deletedSet.add(id));
+          }
+        } catch (_) {}
+        const nonDeleted = orders.filter((o) => !deletedSet.has(o.id));
+        if (nonDeleted.length > 0) {
+          saveOrdersBatchToServer(nonDeleted);
+        }
       }
     } catch (e) {
       console.error('Error saving orders', e);
@@ -1187,18 +1284,37 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }, 3600);
   };
 
-  // Delete Order (ลบออเดอร์ออกจากระบบและเซิร์ฟเวอร์ถาวร)
+  // Delete Order (ลบออเดอร์ออกจากระบบและเซิร์ฟเวอร์ถาวร ไม่เด้งกลับมาอีกต่อไป)
   const deleteOrder = async (orderId: string): Promise<boolean> => {
-    setOrders((prev) => prev.filter((o) => o.id !== orderId));
+    // 1. Immediately blacklist orderId locally and in localStorage
+    setDeletedOrderIds((prev) => {
+      const next = Array.from(new Set([...prev, orderId]));
+      try {
+        localStorage.setItem(LOCAL_STORAGE_DELETED_ORDERS, JSON.stringify(next));
+      } catch (_) {}
+      return next;
+    });
+
+    // 2. Immediately remove from local state and update localStorage
+    setOrders((prev) => {
+      const remaining = prev.filter((o) => o.id !== orderId);
+      try {
+        localStorage.setItem(LOCAL_STORAGE_ORDERS, JSON.stringify(remaining));
+      } catch (_) {}
+      return remaining;
+    });
+
+    // 3. Delete permanently on server disk (records tombstone)
     try {
       await deleteOrderFromServer(orderId);
     } catch (e) {
       console.warn('Failed to delete order on server:', e);
     }
+
     soundService.playNotificationSound();
     setNotification({
       type: 'info',
-      message: `ลบออเดอร์ ${orderId} ออกจากระบบเรียบร้อยแล้ว`,
+      message: `ลบออเดอร์ ${orderId} ออกจากระบบถาวรเรียบร้อยแล้ว`,
     });
     return true;
   };
@@ -2042,6 +2158,50 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     window.location.href = '/api/data/backup/download';
   };
 
+  const restoreDatabaseBackup = async (backupData: any): Promise<{ success: boolean; orderCount: number; customerCount: number }> => {
+    try {
+      const incomingOrders: TopUpOrder[] = Array.isArray(backupData.orders) ? backupData.orders : [];
+      const incomingCustomers: CustomerUser[] = Array.isArray(backupData.customers) ? backupData.customers : [];
+
+      if (incomingOrders.length > 0) {
+        setOrders((prev) => {
+          const map = new Map<string, TopUpOrder>();
+          prev.forEach((o) => map.set(o.id, o));
+          incomingOrders.forEach((o) => map.set(o.id, o));
+          const merged = Array.from(map.values());
+          try {
+            localStorage.setItem(LOCAL_STORAGE_ORDERS, JSON.stringify(merged));
+          } catch (_) {}
+          return merged;
+        });
+        await saveOrdersBatchToServer(incomingOrders);
+      }
+
+      if (incomingCustomers.length > 0) {
+        setCustomerUsers((prev) => {
+          const map = new Map<string, CustomerUser>();
+          prev.forEach((c) => map.set(c.id, c));
+          incomingCustomers.forEach((c) => map.set(c.id, c));
+          const merged = Array.from(map.values());
+          try {
+            localStorage.setItem(LOCAL_STORAGE_CUSTOMER_USERS, JSON.stringify(merged));
+          } catch (_) {}
+          return merged;
+        });
+        await saveCustomersBatchToServer(incomingCustomers);
+      }
+
+      return {
+        success: true,
+        orderCount: incomingOrders.length,
+        customerCount: incomingCustomers.length,
+      };
+    } catch (err) {
+      console.error('Failed to restore backup data:', err);
+      return { success: false, orderCount: 0, customerCount: 0 };
+    }
+  };
+
   const updatePaymentConfig = (newConfig: Partial<PaymentConfig>) => {
     setPaymentConfig((prev) => {
       const updated = { ...prev, ...newConfig };
@@ -2138,6 +2298,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         customerLogin,
         customerLogout,
         downloadDatabaseBackup,
+        restoreDatabaseBackup,
         refreshOrders,
         soundEnabled,
         toggleSound,

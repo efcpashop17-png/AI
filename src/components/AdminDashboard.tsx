@@ -101,12 +101,47 @@ export const AdminDashboard: React.FC = () => {
     adminUploadDeliveryProof,
     resetAllData,
     downloadDatabaseBackup,
+    restoreDatabaseBackup,
     setNotification,
     setIsAdminLoginModalOpen,
     setActiveTab,
     setSelectedOrderForPackagePopup,
     refreshOrders,
   } = useApp();
+
+  const restoreFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleRestoreJsonBackup = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const content = event.target?.result as string;
+        const parsed = JSON.parse(content);
+        const res = await restoreDatabaseBackup(parsed);
+        if (res.success) {
+          setNotification({
+            type: 'success',
+            message: `กู้คืนข้อมูลสำเร็จเรียบร้อย! (${res.orderCount} คำสั่งซื้อ, ${res.customerCount} บัญชีลูกค้า)`,
+          });
+        } else {
+          setNotification({
+            type: 'error',
+            message: 'รูปแบบไฟล์สำรองข้อมูลไม่ถูกต้อง',
+          });
+        }
+      } catch (err) {
+        setNotification({
+          type: 'error',
+          message: 'ไม่สามารถอ่านไฟล์สำรองข้อมูลได้ กรุณาตรวจสอบไฟล์ JSON',
+        });
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
 
   // Auto-Refresh state for orders list (30 seconds real-time incoming orders)
   const [autoRefreshOrders, setAutoRefreshOrders] = useState<boolean>(true);
@@ -2490,7 +2525,7 @@ export const AdminDashboard: React.FC = () => {
                 <p className="text-xs text-slate-300 leading-relaxed">
                   ดาวน์โหลดข้อมูลดิบทั้งหมด (คำสั่งซื้อทั้งหมด, บัญชียูสเซอร์ลูกค้า, สลิป, และยอดเงิน) เป็นไฟล์ JSON สำหรับกู้คืนหรือเก็บสำรองข้อมูลในเครื่องแบบถาวร
                 </p>
-                <div className="pt-1">
+                <div className="pt-1 flex flex-wrap items-center gap-3">
                   <button
                     type="button"
                     onClick={downloadDatabaseBackup}
@@ -2498,6 +2533,23 @@ export const AdminDashboard: React.FC = () => {
                   >
                     <Download className="w-4 h-4" />
                     <span>ดาวน์โหลดไฟล์สำรองฐานข้อมูลถาวร (.JSON)</span>
+                  </button>
+
+                  <input
+                    type="file"
+                    ref={restoreFileInputRef}
+                    onChange={handleRestoreJsonBackup}
+                    accept=".json,application/json"
+                    className="hidden"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => restoreFileInputRef.current?.click()}
+                    className="w-full sm:w-auto py-2.5 px-6 rounded-xl bg-[#0b0e17] hover:bg-[#151c2e] text-cyan-300 hover:text-cyan-200 border-2 border-cyan-500/50 hover:border-cyan-400 font-black text-xs transition-all shadow flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Upload className="w-4 h-4" />
+                    <span>กู้คืนฐานข้อมูลจากไฟล์สำรอง (.JSON)</span>
                   </button>
                 </div>
               </div>
@@ -3620,9 +3672,18 @@ export const AdminDashboard: React.FC = () => {
 
             {/* Security Verification Input */}
             <div className="space-y-2 mb-5">
-              <label className="block text-xs font-bold text-slate-300">
-                พิมพ์คำว่า <span className="font-mono font-black text-rose-400 uppercase select-all bg-rose-950/60 px-2 py-0.5 rounded border border-rose-500/40">DELETE</span> เพื่อยืนยันการลบ *
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-bold text-slate-300">
+                  พิมพ์คำว่า <span onClick={() => setDeleteConfirmText('DELETE')} className="font-mono font-black text-rose-400 uppercase select-all bg-rose-950/60 px-2 py-0.5 rounded border border-rose-500/40 cursor-pointer hover:bg-rose-900/80 transition-colors" title="คลิกเพื่อเติม DELETE">DELETE</span> เพื่อยืนยันการลบถาวร *
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setDeleteConfirmText('DELETE')}
+                  className="text-[11px] font-bold text-rose-400 hover:text-rose-300 underline cursor-pointer"
+                >
+                  เติม DELETE อัตโนมัติ
+                </button>
+              </div>
               <input
                 type="text"
                 value={deleteConfirmText}
