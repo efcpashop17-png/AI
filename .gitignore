@@ -9,7 +9,7 @@ bun.lockb
 .env*
 !.env.example
 
-# Production database files (Never overwrite with Git deploy)
-data/
-data/*.json
+# Temporary database backups and files
 data/backups/
+data/*.tmp*
+data/*.safe_backup.json

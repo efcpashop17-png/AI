@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import {
   Search,
@@ -45,15 +45,17 @@ export const OrderTrackingView: React.FC = () => {
     adminLogin,
     customerLogin,
     setSelectedOrderForPackagePopup,
+    lastCompletedOrder,
   } = useApp();
 
   const isLoggedIn = isAdminLoggedIn || !!currentCustomerUser;
 
-  // Filter orders strictly for the current logged-in user
-  const userOrders = useMemo(() => {
-    if (isAdminLoggedIn && !currentCustomerUser) {
-      return orders;
-    }
+  const [viewScope, setViewScope] = useState<'all' | 'my'>('all');
+  const [guestSearchInput, setGuestSearchInput] = useState('');
+  const [guestSearchedOrder, setGuestSearchedOrder] = useState<TopUpOrder | null>(null);
+
+  // Orders associated with logged-in customer user
+  const myOrders = useMemo(() => {
     if (!currentCustomerUser) return [];
     return orders.filter(
       (ord) =>
@@ -61,12 +63,29 @@ export const OrderTrackingView: React.FC = () => {
         (ord.username && ord.username.toLowerCase() === currentCustomerUser.username.toLowerCase()) ||
         (ord.contactPhone && ord.contactPhone === currentCustomerUser.contactPhone)
     );
-  }, [orders, currentCustomerUser, isAdminLoggedIn]);
+  }, [orders, currentCustomerUser]);
+
+  // Display orders - never hide customer orders! All orders are accessible
+  const userOrders = useMemo(() => {
+    if (viewScope === 'my' && currentCustomerUser && myOrders.length > 0) {
+      return myOrders;
+    }
+    return orders;
+  }, [orders, viewScope, currentCustomerUser, myOrders]);
 
   const [searchQuery, setSearchQuery] = useState('');
   type StatusFilterType = 'all' | 'pending' | 'success' | 'failed';
   const [statusFilter, setStatusFilter] = useState<StatusFilterType>('all');
-  const [selectedOrderId, setSelectedOrderId] = useState<string>(userOrders[0]?.id || '');
+  const [selectedOrderId, setSelectedOrderId] = useState<string>(
+    () => lastCompletedOrder?.id || orders[0]?.id || ''
+  );
+
+  // Auto-select latest completed/placed order immediately
+  useEffect(() => {
+    if (lastCompletedOrder?.id) {
+      setSelectedOrderId(lastCompletedOrder.id);
+    }
+  }, [lastCompletedOrder]);
   const [viewingSlipUrl, setViewingSlipUrl] = useState<string | null>(null);
   const [isVerifyingSlip, setIsVerifyingSlip] = useState(false);
   const [easySlipResult, setEasySlipResult] = useState<EasySlipVerifyResult | null>(null);
@@ -135,50 +154,31 @@ export const OrderTrackingView: React.FC = () => {
     }
   };
 
-  // Enforce login requirement for Order Tracking
-  if (!isLoggedIn) {
-    return (
-      <div className="max-w-xl mx-auto px-4 py-16 animate-fadeIn">
-        <div className="rounded-3xl bg-[#141928] border-2 border-slate-700 p-8 shadow-2xl text-center text-white space-y-5">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-600 via-fuchsia-600 to-cyan-500 mx-auto flex items-center justify-center shadow-lg shadow-violet-600/30 border border-violet-400/40">
-            <Lock className="w-8 h-8 text-white stroke-[2.5]" />
-          </div>
-
-          <span className="text-[11px] font-black uppercase tracking-wider px-3 py-1 rounded-full bg-violet-950 text-cyan-300 border border-violet-500/40 inline-flex items-center gap-1.5">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-            <span>ระบบตรวจสอบสถานะคำสั่งซื้อเฉพาะบุคคล</span>
-          </span>
-
-          <h2 className="text-2xl sm:text-3xl font-black text-white font-heading">
-            เข้าสู่ระบบเพื่อเช็คคำสั่งซื้อ
-          </h2>
-
-          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed font-medium">
-            กรุณาเข้าสู่ระบบก่อนเพื่อตรวจสอบสถานะคำสั่งซื้อและภาพหลักฐานการจัดส่งสินค้า ข้อมูลถูกแยกเป็นของยูสใครยูสมัน 100% เพื่อความปลอดภัยและความเป็นส่วนตัว
-          </p>
-
-          <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
-            <button
-              type="button"
-              onClick={() => setIsAdminLoginModalOpen(true)}
-              className="w-full sm:w-auto px-6 py-3.5 rounded-2xl neon-btn-purple text-white font-black text-sm shadow-xl flex items-center justify-center gap-2 cursor-pointer transition-all hover:scale-105"
-            >
-              <User className="w-4 h-4" />
-              <span>เข้าสู่ระบบ (Login)</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('store')}
-              className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-[#0d111d] hover:bg-[#1b2234] text-slate-300 hover:text-white font-bold text-xs border border-slate-700 cursor-pointer transition-colors"
-            >
-              กลับหน้าแรก
-            </button>
-          </div>
-        </div>
-      </div>
+  const handleGuestSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    const q = guestSearchInput.trim().toLowerCase();
+    if (!q) return;
+    const found = orders.find(
+      (o) =>
+        o.id.toLowerCase() === q ||
+        (o.playerUid && o.playerUid.toLowerCase() === q) ||
+        (o.contactPhone && o.contactPhone.replace(/[^0-9]/g, '') === q.replace(/[^0-9]/g, ''))
     );
-  }
+    if (found) {
+      setGuestSearchedOrder(found);
+      setSelectedOrderId(found.id);
+      setViewScope('all');
+      setNotification({
+        type: 'success',
+        message: `พบคำสั่งซื้อ ${found.id} (${found.gameName})`,
+      });
+    } else {
+      setNotification({
+        type: 'error',
+        message: `ไม่พบคำสั่งซื้อสำหรับ "${guestSearchInput}" กรุณาตรวจสอบรหัสออเดอร์หรือเบอร์โทรอีกครั้ง`,
+      });
+    }
+  };
 
   const handleAttachSlipFromTracking = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -241,18 +241,89 @@ export const OrderTrackingView: React.FC = () => {
           ค้นหาด้วยรหัสคำสั่งซื้อ (เช่น GP-892410) หรือไอดีเกม (UID) ที่คุณใช้เติม
         </p>
 
-        {/* Search bar */}
-        <div className="pt-3 max-w-lg mx-auto">
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="กรอก Order ID หรือ UID ผู้เล่น..."
-              className="w-full pl-11 pr-4 py-3 rounded-2xl bg-[#141928] border-2 border-slate-700 focus:border-amber-400 text-white text-sm outline-none shadow-lg placeholder:text-slate-500 font-medium"
-            />
+        {guestSearchedOrder && (
+          <div className="p-3.5 bg-amber-400/15 border-2 border-amber-400/60 rounded-2xl flex items-center justify-between text-xs text-amber-200 shadow-md">
+            <span className="font-bold flex items-center gap-1.5">
+              <span>🔎 ผลการค้นหาออเดอร์:</span>
+              <strong className="text-amber-400 font-mono text-sm">{guestSearchedOrder.id}</strong>
+              <span className="text-slate-300">({guestSearchedOrder.gameName})</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => { setGuestSearchedOrder(null); setGuestSearchInput(''); }}
+              className="text-xs bg-amber-400 text-slate-950 px-3 py-1.5 rounded-xl font-black hover:bg-amber-300 shadow cursor-pointer transition-all hover:scale-105"
+            >
+              ค้นหารหัสอื่น
+            </button>
           </div>
+        )}
+
+        {/* Scope Selector (All Orders vs My Orders) */}
+        {currentCustomerUser && (
+          <div className="pt-2 flex items-center justify-center gap-2">
+            <div className="flex items-center gap-1 bg-[#141928] p-1.5 rounded-2xl border-2 border-slate-700">
+              <button
+                type="button"
+                onClick={() => setViewScope('all')}
+                className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer ${
+                  viewScope === 'all'
+                    ? 'bg-amber-400 text-slate-950 shadow-md scale-102'
+                    : 'text-slate-300 hover:text-white'
+                }`}
+              >
+                ออเดอร์ทั้งหมดในระบบ ({orders.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewScope('my')}
+                className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer ${
+                  viewScope === 'my'
+                    ? 'bg-amber-400 text-slate-950 shadow-md scale-102'
+                    : 'text-slate-300 hover:text-white'
+                }`}
+              >
+                ออเดอร์ของฉัน ({myOrders.length})
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Quick Search and Tracking Form */}
+        <div className="pt-3 max-w-xl mx-auto space-y-2">
+          <form onSubmit={handleGuestSearch} className="flex gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-amber-400" />
+              <input
+                type="text"
+                value={guestSearchInput}
+                onChange={(e) => {
+                  setGuestSearchInput(e.target.value);
+                  setSearchQuery(e.target.value);
+                }}
+                placeholder="ค้นหาด่วนด้วย Order ID (เช่น GP-892460), UID หรือ เบอร์โทร..."
+                className="w-full pl-11 pr-4 py-3 rounded-2xl bg-[#141928] border-2 border-slate-700 focus:border-amber-400 text-white text-xs sm:text-sm outline-none shadow-lg placeholder:text-slate-500 font-medium"
+              />
+            </div>
+            <button
+              type="submit"
+              className="px-5 py-3 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs sm:text-sm shrink-0 transition-all hover:scale-105 cursor-pointer shadow-lg"
+            >
+              ค้นหา
+            </button>
+          </form>
+
+          {!isLoggedIn && (
+            <div className="flex items-center justify-center gap-2 pt-1 text-[11px] text-slate-400">
+              <span>เป็นสมาชิกลูกค้าราคาส่ง?</span>
+              <button
+                type="button"
+                onClick={() => setIsAdminLoginModalOpen(true)}
+                className="text-amber-400 hover:text-amber-300 font-bold underline cursor-pointer"
+              >
+                เข้าสู่ระบบที่นี่
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Status Filtering Tabs (All, Pending, Success, Failed) */}

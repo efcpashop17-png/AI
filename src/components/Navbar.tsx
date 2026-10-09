@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import {
   Gamepad2,
@@ -49,15 +49,16 @@ export const Navbar: React.FC = () => {
 
   const isLoggedIn = isAdminLoggedIn || !!currentCustomerUser;
 
-  const userOrders = orders.filter((ord) => {
-    if (isAdminLoggedIn && !currentCustomerUser) return true;
-    if (!currentCustomerUser) return false;
-    return (
-      ord.customerId === currentCustomerUser.id ||
-      (ord.username && ord.username.toLowerCase() === currentCustomerUser.username.toLowerCase()) ||
-      (ord.contactPhone && ord.contactPhone === currentCustomerUser.contactPhone)
+  const userOrders = useMemo(() => {
+    if (isAdminLoggedIn || !currentCustomerUser) return orders;
+    const matched = orders.filter(
+      (ord) =>
+        ord.customerId === currentCustomerUser.id ||
+        (ord.username && ord.username.toLowerCase() === currentCustomerUser.username.toLowerCase()) ||
+        (ord.contactPhone && ord.contactPhone === currentCustomerUser.contactPhone)
     );
-  });
+    return matched.length > 0 ? matched : orders;
+  }, [orders, isAdminLoggedIn, currentCustomerUser]);
 
   const handleNavClick = (tab: ActiveTab) => {
     if (tab === 'admin' && !isAdminLoggedIn) {
@@ -133,7 +134,7 @@ export const Navbar: React.FC = () => {
             >
               <History className="w-4 h-4 text-cyan-400 stroke-[2.5]" />
               <span>เช็คคำสั่งซื้อ</span>
-              {isLoggedIn && userOrders.length > 0 && (
+              {userOrders.length > 0 && (
                 <span className="text-xs px-2 py-0.5 rounded-full bg-violet-900/60 text-cyan-300 border border-violet-600/40 font-bold tabular-nums">
                   {userOrders.length}
                 </span>
@@ -352,7 +353,7 @@ export const Navbar: React.FC = () => {
               <History className="w-4 h-4 text-cyan-400" />
               <span>เช็คคำสั่งซื้อ</span>
             </span>
-            {isLoggedIn && userOrders.length > 0 && (
+            {userOrders.length > 0 && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-violet-900/60 text-cyan-300">
                 {userOrders.length}
               </span>

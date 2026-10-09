@@ -69,8 +69,10 @@ app.post("/api/verify-slip", async (req: Request, res: Response) => {
 // ==========================================
 const DATA_DIR = path.join(process.cwd(), "data");
 const ORDERS_FILE = path.join(DATA_DIR, "orders.json");
+const ORDERS_SAFE_BACKUP = path.join(DATA_DIR, "orders.safe_backup.json");
 const DELETED_ORDERS_FILE = path.join(DATA_DIR, "deleted_order_ids.json");
 const CUSTOMERS_FILE = path.join(DATA_DIR, "customers.json");
+const CUSTOMERS_SAFE_BACKUP = path.join(DATA_DIR, "customers.safe_backup.json");
 const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
 const GAMES_FILE = path.join(DATA_DIR, "games.json");
 const BACKUPS_DIR = path.join(DATA_DIR, "backups");
@@ -81,8 +83,164 @@ if (!fs.existsSync(BACKUPS_DIR)) fs.mkdirSync(BACKUPS_DIR, { recursive: true });
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 // Static serving for uploaded files
-app.use("/uploads", express.static(UPLOADS_DIR));
-app.use("/public/uploads", express.static(UPLOADS_DIR));
+app.use("/uploads", express.static(UPLOADS_DIR, {
+  setHeaders: (res) => {
+    res.setHeader("Cache-Control", "public, max-age=86400");
+  }
+}));
+app.use("/public/uploads", express.static(UPLOADS_DIR, {
+  setHeaders: (res) => {
+    res.setHeader("Cache-Control", "public, max-age=86400");
+  }
+}));
+
+// ==========================================
+// Real-Time Server-Sent Events (SSE) Bus
+// ==========================================
+const sseClients = new Set<Response>();
+
+app.get("/api/data/events", (req: Request, res: Response) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache, no-transform, no-store");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders?.();
+
+  sseClients.add(res);
+
+  // Send initial connected payload
+  res.write(`data: ${JSON.stringify({ type: "connected", timestamp: Date.now() })}\n\n`);
+
+  const heartbeat = setInterval(() => {
+    try {
+      res.write(`data: ${JSON.stringify({ type: "heartbeat", timestamp: Date.now() })}\n\n`);
+    } catch (_) {
+      clearInterval(heartbeat);
+      sseClients.delete(res);
+    }
+  }, 20000);
+
+  req.on("close", () => {
+    clearInterval(heartbeat);
+    sseClients.delete(res);
+  });
+});
+
+function broadcastEvent(type: string, data: any) {
+  const payload = `data: ${JSON.stringify({ type, data, timestamp: Date.now() })}\n\n`;
+  for (const client of sseClients) {
+    try {
+      client.write(payload);
+    } catch (_) {
+      sseClients.delete(client);
+    }
+  }
+}
+
+// In-Memory Master Database with Atomic Disk Persistence
+let memoryOrders: any[] = [];
+let memoryCustomers: any[] = [];
+let memoryGames: any[] | null = null;
+let memorySettings: any = null;
+let memoryDeletedOrderIds: string[] = [];
+let lastSnapshotTime = 0;
+
+function readJsonFile(filePath: string, defaultData: any = []): any {
+  try {
+    if (!fs.existsSync(filePath)) {
+      return defaultData;
+    }
+    const content = fs.readFileSync(filePath, "utf-8");
+    if (!content || !content.trim()) {
+      return defaultData;
+    }
+    return JSON.parse(content);
+  } catch (err) {
+    console.error(`Error reading ${filePath}:`, err);
+    return defaultData;
+  }
+}
+
+function writeJsonFile(filePath: string, data: any): boolean {
+  try {
+    const tempPath = `${filePath}.tmp.${Date.now()}.${Math.random().toString(36).slice(2, 6)}`;
+    fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), "utf-8");
+    fs.renameSync(tempPath, filePath);
+    return true;
+  } catch (err) {
+    console.error(`Error writing ${filePath}:`, err);
+    try {
+      fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
+      return true;
+    } catch (e) {
+      console.error(`Direct fallback write failed for ${filePath}:`, e);
+      return false;
+    }
+  }
+}
+
+function createBackupSnapshotThrottled(prefix: string, data: any) {
+  const now = Date.now();
+  if (now - lastSnapshotTime < 30000) return; // Limit to once every 30s to avoid disk thrashing
+  lastSnapshotTime = now;
+  try {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const backupPath = path.join(BACKUPS_DIR, `${prefix}_${timestamp}.json`);
+    const tempPath = `${backupPath}.tmp`;
+    fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), "utf-8");
+    fs.renameSync(tempPath, backupPath);
+
+    const files = fs.readdirSync(BACKUPS_DIR).filter((f) => f.startsWith(prefix));
+    if (files.length > 50) {
+      files.sort().slice(0, files.length - 50).forEach((f) => {
+        try { fs.unlinkSync(path.join(BACKUPS_DIR, f)); } catch (_) {}
+      });
+    }
+  } catch (e) {
+    console.error("Backup snapshot error:", e);
+  }
+}
+
+// Initialize memory state from disk safely
+function loadDatabaseState() {
+  memoryOrders = readJsonFile(ORDERS_FILE, []);
+  if (memoryOrders.length === 0 && fs.existsSync(ORDERS_SAFE_BACKUP)) {
+    try {
+      memoryOrders = JSON.parse(fs.readFileSync(ORDERS_SAFE_BACKUP, "utf-8"));
+      writeJsonFile(ORDERS_FILE, memoryOrders);
+      console.log(`[Auto-Recovery] Initialized ${memoryOrders.length} orders from safe backup`);
+    } catch (_) {}
+  }
+  // If still empty, load from backup snapshot directory if available
+  if (memoryOrders.length === 0 && fs.existsSync(BACKUPS_DIR)) {
+    try {
+      const snapFiles = fs.readdirSync(BACKUPS_DIR).filter(f => f.startsWith('orders_snapshot')).sort().reverse();
+      if (snapFiles.length > 0) {
+        memoryOrders = JSON.parse(fs.readFileSync(path.join(BACKUPS_DIR, snapFiles[0]), 'utf-8'));
+        writeJsonFile(ORDERS_FILE, memoryOrders);
+        console.log(`[Auto-Recovery] Initialized ${memoryOrders.length} orders from snapshot ${snapFiles[0]}`);
+      }
+    } catch (_) {}
+  }
+  // Ensure no test sync orders linger
+  memoryOrders = memoryOrders.filter((o: any) => o && o.id !== 'GP-TEST-SYNC-1');
+
+  memoryCustomers = readJsonFile(CUSTOMERS_FILE, []);
+  if (memoryCustomers.length === 0 && fs.existsSync(CUSTOMERS_SAFE_BACKUP)) {
+    try {
+      memoryCustomers = JSON.parse(fs.readFileSync(CUSTOMERS_SAFE_BACKUP, "utf-8"));
+      writeJsonFile(CUSTOMERS_FILE, memoryCustomers);
+      console.log(`[Auto-Recovery] Initialized ${memoryCustomers.length} customers from safe backup`);
+    } catch (_) {}
+  }
+
+  memoryGames = readJsonFile(GAMES_FILE, null);
+  memorySettings = readJsonFile(SETTINGS_FILE, null);
+  memoryDeletedOrderIds = readJsonFile(DELETED_ORDERS_FILE, []);
+  console.log(`[Database Loaded] Orders: ${memoryOrders.length}, Customers: ${memoryCustomers.length}, Games: ${memoryGames ? memoryGames.length : 0}`);
+}
+
+loadDatabaseState();
 
 // Image Upload Endpoint (saves base64 data URL to permanent disk file)
 app.post("/api/upload", (req: Request, res: Response) => {
@@ -119,115 +277,30 @@ app.post("/api/upload", (req: Request, res: Response) => {
   }
 });
 
-function readJsonFile(filePath: string, defaultData: any[] = []): any[] {
-  try {
-    if (!fs.existsSync(filePath)) {
-      // Auto-recover from latest backup snapshot if available
-      const prefix = path.basename(filePath, ".json");
-      if (fs.existsSync(BACKUPS_DIR)) {
-        const backups = fs.readdirSync(BACKUPS_DIR)
-          .filter(f => f.startsWith(`${prefix}_snapshot`) || f.startsWith(`${prefix}_`))
-          .sort()
-          .reverse();
-        if (backups.length > 0) {
-          try {
-            const backupContent = fs.readFileSync(path.join(BACKUPS_DIR, backups[0]), "utf-8");
-            const parsed = JSON.parse(backupContent);
-            if (parsed && (Array.isArray(parsed) ? parsed.length > 0 : true)) {
-              console.log(`[Auto-Recovery] Recovered ${filePath} from latest backup: ${backups[0]}`);
-              writeJsonFile(filePath, parsed);
-              return parsed;
-            }
-          } catch (_) {}
-        }
-      }
-      return defaultData;
-    }
-    const content = fs.readFileSync(filePath, "utf-8");
-    if (!content || !content.trim()) {
-      return defaultData;
-    }
-    return JSON.parse(content);
-  } catch (err) {
-    console.error(`Error reading ${filePath}:`, err);
-    return defaultData;
-  }
-}
-
-function writeJsonFile(filePath: string, data: any): boolean {
-  try {
-    // Atomic write via temp file rename
-    const tempPath = `${filePath}.tmp.${Date.now()}.${Math.random().toString(36).slice(2, 6)}`;
-    fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), "utf-8");
-    fs.renameSync(tempPath, filePath);
-    return true;
-  } catch (err) {
-    console.error(`Error atomic writing ${filePath}:`, err);
-    try {
-      fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
-      return true;
-    } catch (e) {
-      console.error(`Direct writing also failed for ${filePath}:`, e);
-      return false;
-    }
-  }
-}
-
-function createBackupSnapshot(prefix: string, data: any) {
-  try {
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const backupPath = path.join(BACKUPS_DIR, `${prefix}_${timestamp}.json`);
-    const tempPath = `${backupPath}.tmp`;
-    fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), "utf-8");
-    fs.renameSync(tempPath, backupPath);
-    
-    const files = fs.readdirSync(BACKUPS_DIR).filter(f => f.startsWith(prefix));
-    if (files.length > 100) {
-      files.sort().slice(0, files.length - 100).forEach(f => {
-        try { fs.unlinkSync(path.join(BACKUPS_DIR, f)); } catch (_) {}
-      });
-    }
-  } catch (e) {
-    console.error("Backup snapshot error:", e);
-  }
-}
-
 app.get("/api/data/all", (_req: Request, res: Response) => {
-  const orders = readJsonFile(ORDERS_FILE, []);
-  const deletedOrderIds = readJsonFile(DELETED_ORDERS_FILE, []);
-  const deletedSet = new Set(deletedOrderIds);
-  const activeOrders = orders.filter((o: any) => !deletedSet.has(o.id));
-  const customers = readJsonFile(CUSTOMERS_FILE, []);
-  const settings = readJsonFile(SETTINGS_FILE, null);
-  const games = readJsonFile(GAMES_FILE, null);
   res.json({
     success: true,
-    orders: activeOrders,
-    deletedOrderIds,
-    customers,
-    settings,
-    games,
+    orders: memoryOrders,
+    deletedOrderIds: memoryDeletedOrderIds,
+    customers: memoryCustomers,
+    settings: memorySettings,
+    games: memoryGames,
     timestamp: Date.now(),
   });
 });
 
 app.get("/api/data/orders", (_req: Request, res: Response) => {
-  const orders = readJsonFile(ORDERS_FILE, []);
-  const deletedOrderIds = readJsonFile(DELETED_ORDERS_FILE, []);
-  const deletedSet = new Set(deletedOrderIds);
-  const activeOrders = orders.filter((o: any) => !deletedSet.has(o.id));
-  res.json(activeOrders);
+  res.json(memoryOrders);
 });
 
 app.get("/api/data/games", (_req: Request, res: Response) => {
-  const games = readJsonFile(GAMES_FILE, null);
-  res.json({ success: true, games });
+  res.json({ success: true, games: memoryGames });
 });
 
 app.post("/api/data/games", (req: Request, res: Response) => {
   try {
     const incoming = req.body;
-    let currentGames = readJsonFile(GAMES_FILE, []);
+    let currentGames = memoryGames || readJsonFile(GAMES_FILE, []);
 
     // 1. Support single package update: { gameId, packageId, updates }
     if (incoming && incoming.gameId && incoming.packageId && incoming.updates) {
@@ -239,8 +312,10 @@ app.post("/api/data/games", (req: Request, res: Response) => {
         currentGames[gIndex].packages = currentGames[gIndex].packages.map((p: any) => 
           p.id === incoming.packageId ? { ...p, ...incoming.updates } : p
         );
+        memoryGames = currentGames;
         writeJsonFile(GAMES_FILE, currentGames);
-        createBackupSnapshot("games_snapshot", currentGames);
+        createBackupSnapshotThrottled("games_snapshot", currentGames);
+        broadcastEvent("games_updated", { games: currentGames });
         return res.json({ success: true, game: currentGames[gIndex] });
       }
     }
@@ -250,8 +325,10 @@ app.post("/api/data/games", (req: Request, res: Response) => {
       const gIndex = currentGames.findIndex((g: any) => g.id === incoming.gameId);
       if (gIndex >= 0) {
         currentGames[gIndex].packages = [...(currentGames[gIndex].packages || []), incoming.package];
+        memoryGames = currentGames;
         writeJsonFile(GAMES_FILE, currentGames);
-        createBackupSnapshot("games_snapshot", currentGames);
+        createBackupSnapshotThrottled("games_snapshot", currentGames);
+        broadcastEvent("games_updated", { games: currentGames });
         return res.json({ success: true, game: currentGames[gIndex] });
       }
     }
@@ -261,8 +338,10 @@ app.post("/api/data/games", (req: Request, res: Response) => {
       const gIndex = currentGames.findIndex((g: any) => g.id === incoming.gameId);
       if (gIndex >= 0) {
         currentGames[gIndex].packages = (currentGames[gIndex].packages || []).filter((p: any) => p.id !== incoming.packageId);
+        memoryGames = currentGames;
         writeJsonFile(GAMES_FILE, currentGames);
-        createBackupSnapshot("games_snapshot", currentGames);
+        createBackupSnapshotThrottled("games_snapshot", currentGames);
+        broadcastEvent("games_updated", { games: currentGames });
         return res.json({ success: true, game: currentGames[gIndex] });
       }
     }
@@ -272,8 +351,10 @@ app.post("/api/data/games", (req: Request, res: Response) => {
       const gIndex = currentGames.findIndex((g: any) => g.id === incoming.gameId);
       if (gIndex >= 0) {
         currentGames[gIndex] = { ...currentGames[gIndex], ...incoming.updates };
+        memoryGames = currentGames;
         writeJsonFile(GAMES_FILE, currentGames);
-        createBackupSnapshot("games_snapshot", currentGames);
+        createBackupSnapshotThrottled("games_snapshot", currentGames);
+        broadcastEvent("games_updated", { games: currentGames });
         return res.json({ success: true, game: currentGames[gIndex] });
       }
     }
@@ -284,7 +365,6 @@ app.post("/api/data/games", (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: "Invalid games array" });
     }
 
-    // Merge incoming games with current games to never drop games
     const mergedMap = new Map();
     currentGames.forEach((g: any) => mergedMap.set(g.id, g));
     gamesList.forEach((g: any) => {
@@ -294,8 +374,10 @@ app.post("/api/data/games", (req: Request, res: Response) => {
     });
 
     const finalGames = Array.from(mergedMap.values());
+    memoryGames = finalGames;
     writeJsonFile(GAMES_FILE, finalGames);
-    createBackupSnapshot("games_snapshot", finalGames);
+    createBackupSnapshotThrottled("games_snapshot", finalGames);
+    broadcastEvent("games_updated", { games: finalGames });
     res.json({ success: true, count: finalGames.length });
   } catch (err) {
     res.status(500).json({ success: false, error: String(err) });
@@ -305,7 +387,9 @@ app.post("/api/data/games", (req: Request, res: Response) => {
 app.post("/api/data/settings", (req: Request, res: Response) => {
   try {
     const incoming = req.body;
+    memorySettings = incoming;
     writeJsonFile(SETTINGS_FILE, incoming);
+    broadcastEvent("settings_updated", { settings: incoming });
     res.json({ success: true, settings: incoming });
   } catch (err) {
     res.status(500).json({ success: false, error: String(err) });
@@ -315,26 +399,26 @@ app.post("/api/data/settings", (req: Request, res: Response) => {
 app.post("/api/data/orders", (req: Request, res: Response) => {
   try {
     const incoming = req.body;
-    let currentOrders = readJsonFile(ORDERS_FILE, []);
-    const deletedOrderIds = readJsonFile(DELETED_ORDERS_FILE, []);
-    const deletedSet = new Set(deletedOrderIds);
     const items = Array.isArray(incoming) ? incoming : (incoming.order ? [incoming.order] : [incoming]);
 
+    let modified = false;
     for (const item of items) {
       if (!item || !item.id) continue;
-      // Do NOT allow resurrection of permanently deleted orders
-      if (deletedSet.has(item.id)) continue;
 
-      const index = currentOrders.findIndex((o: any) => o.id === item.id);
+      const index = memoryOrders.findIndex((o: any) => o.id === item.id);
       if (index >= 0) {
-        currentOrders[index] = { ...currentOrders[index], ...item };
+        memoryOrders[index] = { ...memoryOrders[index], ...item };
       } else {
-        currentOrders.unshift(item);
+        memoryOrders.unshift(item);
       }
+      modified = true;
     }
-    writeJsonFile(ORDERS_FILE, currentOrders);
-    createBackupSnapshot("orders_snapshot", currentOrders);
-    res.json({ success: true, count: currentOrders.length });
+    if (modified) {
+      writeJsonFile(ORDERS_FILE, memoryOrders);
+      createBackupSnapshotThrottled("orders_snapshot", memoryOrders);
+      broadcastEvent("orders_updated", { orders: memoryOrders });
+    }
+    res.json({ success: true, count: memoryOrders.length, orders: memoryOrders });
   } catch (err) {
     res.status(500).json({ success: false, error: String(err) });
   }
@@ -343,22 +427,19 @@ app.post("/api/data/orders", (req: Request, res: Response) => {
 app.delete("/api/data/orders/:id", (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    let currentOrders = readJsonFile(ORDERS_FILE, []);
-    createBackupSnapshot("orders_before_admin_delete", currentOrders);
-    currentOrders = currentOrders.filter((o: any) => o.id !== id);
-    writeJsonFile(ORDERS_FILE, currentOrders);
+    memoryOrders = memoryOrders.filter((o: any) => o.id !== id);
+    writeJsonFile(ORDERS_FILE, memoryOrders);
 
-    // Record tombstone so no stale client/sync can ever bring it back
-    let deletedOrderIds = readJsonFile(DELETED_ORDERS_FILE, []);
-    if (!deletedOrderIds.includes(id)) {
-      deletedOrderIds.push(id);
-      if (deletedOrderIds.length > 5000) {
-        deletedOrderIds = deletedOrderIds.slice(-5000);
+    if (!memoryDeletedOrderIds.includes(id)) {
+      memoryDeletedOrderIds.push(id);
+      if (memoryDeletedOrderIds.length > 5000) {
+        memoryDeletedOrderIds = memoryDeletedOrderIds.slice(-5000);
       }
-      writeJsonFile(DELETED_ORDERS_FILE, deletedOrderIds);
+      writeJsonFile(DELETED_ORDERS_FILE, memoryDeletedOrderIds);
     }
 
-    res.json({ success: true, count: currentOrders.length, deletedId: id });
+    broadcastEvent("orders_updated", { orders: memoryOrders, deletedId: id });
+    res.json({ success: true, count: memoryOrders.length, deletedId: id });
   } catch (err) {
     res.status(500).json({ success: false, error: String(err) });
   }
@@ -367,21 +448,21 @@ app.delete("/api/data/orders/:id", (req: Request, res: Response) => {
 app.post("/api/data/customers", (req: Request, res: Response) => {
   try {
     const incoming = req.body;
-    let currentCustomers = readJsonFile(CUSTOMERS_FILE, []);
     const items = Array.isArray(incoming) ? incoming : (incoming.customer ? [incoming.customer] : [incoming]);
 
     for (const item of items) {
       if (!item || !item.id) continue;
-      const index = currentCustomers.findIndex((c: any) => c.id === item.id || (c.username && c.username.toLowerCase() === item.username.toLowerCase()));
+      const index = memoryCustomers.findIndex((c: any) => c.id === item.id || (c.username && c.username.toLowerCase() === item.username.toLowerCase()));
       if (index >= 0) {
-        currentCustomers[index] = { ...currentCustomers[index], ...item };
+        memoryCustomers[index] = { ...memoryCustomers[index], ...item };
       } else {
-        currentCustomers.push(item);
+        memoryCustomers.push(item);
       }
     }
-    writeJsonFile(CUSTOMERS_FILE, currentCustomers);
-    createBackupSnapshot("customers_snapshot", currentCustomers);
-    res.json({ success: true, count: currentCustomers.length });
+    writeJsonFile(CUSTOMERS_FILE, memoryCustomers);
+    createBackupSnapshotThrottled("customers_snapshot", memoryCustomers);
+    broadcastEvent("customers_updated", { customers: memoryCustomers });
+    res.json({ success: true, count: memoryCustomers.length });
   } catch (err) {
     res.status(500).json({ success: false, error: String(err) });
   }
@@ -390,19 +471,18 @@ app.post("/api/data/customers", (req: Request, res: Response) => {
 app.delete("/api/data/customers/:id", (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    let currentCustomers = readJsonFile(CUSTOMERS_FILE, []);
-    createBackupSnapshot("customers_before_admin_delete", currentCustomers);
-    currentCustomers = currentCustomers.filter((c: any) => c.id !== id);
-    writeJsonFile(CUSTOMERS_FILE, currentCustomers);
-    res.json({ success: true, count: currentCustomers.length });
+    memoryCustomers = memoryCustomers.filter((c: any) => c.id !== id);
+    writeJsonFile(CUSTOMERS_FILE, memoryCustomers);
+    broadcastEvent("customers_updated", { customers: memoryCustomers, deletedId: id });
+    res.json({ success: true, count: memoryCustomers.length });
   } catch (err) {
     res.status(500).json({ success: false, error: String(err) });
   }
 });
 
 app.get("/api/data/backup/download", (_req: Request, res: Response) => {
-  const orders = readJsonFile(ORDERS_FILE, []);
-  const customers = readJsonFile(CUSTOMERS_FILE, []);
+  const orders = memoryOrders;
+  const customers = memoryCustomers;
   const payload = {
     appName: "EF CPA Shop",
     exportTime: new Date().toISOString(),

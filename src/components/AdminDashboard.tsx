@@ -151,9 +151,9 @@ export const AdminDashboard: React.FC = () => {
     e.target.value = '';
   };
 
-  // Auto-Refresh state for orders list (30 seconds real-time incoming orders)
+  // Auto-Refresh state for orders list (Real-time SSE + 5 seconds periodic fallback)
   const [autoRefreshOrders, setAutoRefreshOrders] = useState<boolean>(true);
-  const [refreshCountdown, setRefreshCountdown] = useState<number>(30);
+  const [refreshCountdown, setRefreshCountdown] = useState<number>(5);
   const [isManualRefreshing, setIsManualRefreshing] = useState<boolean>(false);
 
   useEffect(() => {
@@ -163,7 +163,7 @@ export const AdminDashboard: React.FC = () => {
       setRefreshCountdown((prev) => {
         if (prev <= 1) {
           refreshOrders();
-          return 30;
+          return 5;
         }
         return prev - 1;
       });
@@ -175,10 +175,10 @@ export const AdminDashboard: React.FC = () => {
   const handleManualRefreshOrders = async () => {
     setIsManualRefreshing(true);
     await refreshOrders();
-    setRefreshCountdown(30);
+    setRefreshCountdown(5);
     setNotification({
       type: 'info',
-      message: 'อัปเดตรายการคำสั่งซื้อล่าสุดเรียบร้อย',
+      message: 'อัปเดตรายการคำสั่งซื้อล่าสุดเรียบร้อย (ซิงค์ตรงจากเซิร์ฟเวอร์)',
     });
     setTimeout(() => setIsManualRefreshing(false), 500);
   };
@@ -510,13 +510,18 @@ export const AdminDashboard: React.FC = () => {
   const completedOrdersCount = orders.filter((o) => o.status === 'completed').length;
   const pendingOrdersCount = orders.filter((o) => o.status !== 'completed' && o.status !== 'failed').length;
 
-  // Filtered orders
+  // Filtered orders with comprehensive search (ID, Game, UID, Phone, Customer Name, Username, Package)
   const filteredOrders = orders.filter((ord) => {
+    const q = orderSearch.trim().toLowerCase();
     const matchQuery =
-      ord.id.toLowerCase().includes(orderSearch.toLowerCase()) ||
-      ord.gameName.toLowerCase().includes(orderSearch.toLowerCase()) ||
-      ord.playerUid.toLowerCase().includes(orderSearch.toLowerCase()) ||
-      (ord.contactPhone && ord.contactPhone.includes(orderSearch));
+      !q ||
+      ord.id.toLowerCase().includes(q) ||
+      (ord.gameName && ord.gameName.toLowerCase().includes(q)) ||
+      (ord.playerUid && ord.playerUid.toLowerCase().includes(q)) ||
+      (ord.contactPhone && ord.contactPhone.includes(q)) ||
+      (ord.customerName && ord.customerName.toLowerCase().includes(q)) ||
+      (ord.username && ord.username.toLowerCase().includes(q)) ||
+      (ord.packageName && ord.packageName.toLowerCase().includes(q));
 
     const matchStatus =
       orderStatusFilter === 'all' ? true : ord.status === orderStatusFilter;
@@ -1485,7 +1490,7 @@ export const AdminDashboard: React.FC = () => {
                     checked={autoRefreshOrders}
                     onChange={(e) => {
                       setAutoRefreshOrders(e.target.checked);
-                      setRefreshCountdown(30);
+                      setRefreshCountdown(5);
                     }}
                     className="sr-only peer"
                   />
@@ -1498,10 +1503,10 @@ export const AdminDashboard: React.FC = () => {
                     ) : (
                       <span className="w-2 h-2 rounded-full bg-slate-600 shrink-0"></span>
                     )}
-                    <span>ออโต้รีเฟรช (30s)</span>
+                    <span>ซิงค์สด Realtime ⚡</span>
                   </span>
                   <span className="text-[10px] text-slate-400 font-mono block leading-tight">
-                    {autoRefreshOrders ? `อัปเดตใน ${refreshCountdown} วินาที` : 'ปิดใช้งาน'}
+                    {autoRefreshOrders ? `อัปเดตอัตโนมัติ (${refreshCountdown}s) + SSE ทันที` : 'ปิดใช้งาน'}
                   </span>
                 </div>
               </div>

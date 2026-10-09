@@ -175,7 +175,7 @@ export interface CustomerUser {
   contactChannel?: string;  // ช่องทางติดต่อ (LINE ID, เบอร์, FB) - เฉพาะแอดมินเห็นได้คนเดียว
   contactPhone: string;
   contactEmail?: string;
-  role: 'wholesale_customer' | 'vip_dealer' | 'agent';
+  role: 'wholesale_customer' | 'vip_dealer' | 'agent' | 'regular_customer';
   balance: number;
   status: 'active' | 'suspended';
   notes?: string;

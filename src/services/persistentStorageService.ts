@@ -212,19 +212,24 @@ export async function saveSettingsToServer(settings: any): Promise<boolean> {
   }
 }
 
-// Persist a single order to the server disk
-export async function saveOrderToServer(order: TopUpOrder): Promise<boolean> {
-  try {
-    const res = await fetch('/api/data/orders', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(order),
-    });
-    return res.ok;
-  } catch (err) {
-    console.warn('Failed to save order to server disk:', err);
-    return false;
+// Persist a single order to the server disk with automatic retry
+export async function saveOrderToServer(order: TopUpOrder, retries = 3): Promise<boolean> {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch('/api/data/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(order),
+      });
+      if (res.ok) return true;
+    } catch (err) {
+      console.warn(`Attempt ${attempt}/${retries} failed to save order to server disk:`, err);
+    }
+    if (attempt < retries) {
+      await new Promise((resolve) => setTimeout(resolve, attempt * 400));
+    }
   }
+  return false;
 }
 
 // Persist multiple orders (batch sync)
@@ -296,4 +301,71 @@ export async function deleteCustomerFromServer(customerId: string): Promise<bool
     console.warn('Failed to delete customer user from server disk:', err);
     return false;
   }
+}
+
+// Subscribe to Real-Time Server-Sent Events across all devices
+export function subscribeToLiveEvents(callbacks: {
+  onOrdersUpdated?: (orders: TopUpOrder[]) => void;
+  onGamesUpdated?: (games: Game[]) => void;
+  onCustomersUpdated?: (customers: CustomerUser[]) => void;
+  onSettingsUpdated?: (settings: any) => void;
+}): () => void {
+  if (typeof window === 'undefined' || typeof EventSource === 'undefined') {
+    return () => {};
+  }
+
+  let eventSource: EventSource | null = null;
+  let isClosed = false;
+  let reconnectTimer: any = null;
+
+  const connect = () => {
+    if (isClosed) return;
+    try {
+      eventSource = new EventSource('/api/data/events');
+
+      eventSource.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          if (!payload || !payload.type) return;
+
+          if (payload.type === 'orders_updated' && payload.data?.orders && callbacks.onOrdersUpdated) {
+            callbacks.onOrdersUpdated(payload.data.orders);
+          } else if (payload.type === 'games_updated' && payload.data?.games && callbacks.onGamesUpdated) {
+            callbacks.onGamesUpdated(payload.data.games);
+          } else if (payload.type === 'customers_updated' && payload.data?.customers && callbacks.onCustomersUpdated) {
+            callbacks.onCustomersUpdated(payload.data.customers);
+          } else if (payload.type === 'settings_updated' && payload.data?.settings && callbacks.onSettingsUpdated) {
+            callbacks.onSettingsUpdated(payload.data.settings);
+          }
+        } catch (_) {}
+      };
+
+      eventSource.onerror = () => {
+        if (eventSource) {
+          eventSource.close();
+          eventSource = null;
+        }
+        if (!isClosed) {
+          clearTimeout(reconnectTimer);
+          reconnectTimer = setTimeout(connect, 3000);
+        }
+      };
+    } catch (_) {
+      if (!isClosed) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = setTimeout(connect, 3000);
+      }
+    }
+  };
+
+  connect();
+
+  return () => {
+    isClosed = true;
+    clearTimeout(reconnectTimer);
+    if (eventSource) {
+      eventSource.close();
+      eventSource = null;
+    }
+  };
 }

@@ -1,0 +1,876 @@
+[
+  {
+    "id": "efootball",
+    "name": "eFootball",
+    "thaiName": "อีฟุตบอล 2026",
+    "aliases": [
+      "efb",
+      "pes",
+      "konami"
+    ],
+    "publisher": "KONAMI",
+    "category": "Sports",
+    "description": "เติมเหรียญ eFootball Coins สต็อก iOS ราคาถูกที่สุด ปลอดภัย 100% จัดส่งสต็อกผ่านเซิร์ฟเวอร์เฉลี่ย 6-32 ชม.",
+    "badge": "⚡ สต็อกยอดนิยมอันดับ 1",
+    "active": true,
+    "todayRate": "เรท 0.85",
+    "bannerGradient": "from-amber-600/40 via-yellow-500/20 to-blue-900/40",
+    "accountField": {
+      "label": "eFootball User ID / UID",
+      "placeholder": "เช่น 384-918-294",
+      "helperText": "ดูได้จากหน้าจอหลัก Extra > User Information > User Details"
+    },
+    "packages": [
+      {
+        "id": "efb-pkg-1",
+        "name": "130 eFootball Coins",
+        "inGameItem": "eFootball Coins",
+        "amount": 130,
+        "originalPrice": 49,
+        "price": 45,
+        "active": true,
+        "badge": "เริ่มต้น"
+      },
+      {
+        "id": "efb-pkg-2",
+        "name": "550 eFootball Coins",
+        "inGameItem": "eFootball Coins",
+        "amount": 550,
+        "originalPrice": 199,
+        "price": 175,
+        "active": true
+      },
+      {
+        "id": "efb-pkg-3",
+        "name": "1,050 eFootball Coins",
+        "inGameItem": "eFootball Coins",
+        "amount": 1050,
+        "originalPrice": 369,
+        "price": 320,
+        "active": true
+      },
+      {
+        "id": "efb-pkg-4",
+        "name": "3,250 eFootball Coins",
+        "inGameItem": "eFootball Coins",
+        "amount": 3250,
+        "originalPrice": 1190,
+        "price": 1050,
+        "isHot": true,
+        "active": true,
+        "badge": "🔥 ขายดีที่สุด"
+      },
+      {
+        "id": "efb-pkg-5",
+        "name": "12,800 eFootball Coins",
+        "inGameItem": "eFootball Coins",
+        "amount": 12800,
+        "originalPrice": 4290,
+        "price": 3990,
+        "isHot": true,
+        "active": true,
+        "badge": "👑 สต็อกคุ้มสุด"
+      }
+    ]
+  },
+  {
+    "id": "fcmobile",
+    "name": "EA Sports FC Mobile",
+    "thaiName": "เอฟซี โมบาย",
+    "aliases": [
+      "fcm",
+      "fifa",
+      "ea"
+    ],
+    "publisher": "EA Sports",
+    "category": "Sports",
+    "description": "เติม FC Points & Silver สต็อกส่งตรง ปลอดภัย ไม่โดนแบน ยอดเข้าทันทีตามคิว",
+    "badge": "🔥 ฮิตมากในไทย",
+    "active": true,
+    "todayRate": "เรท 0.88",
+    "bannerGradient": "from-emerald-600/40 via-teal-500/20 to-slate-900/40",
+    "accountField": {
+      "label": "EA UID / User ID",
+      "placeholder": "เช่น 1002938475",
+      "helperText": "ดูได้จากหน้า Settings > Customer Service > UID ในเกม"
+    },
+    "packages": [
+      {
+        "id": "fcm-pkg-1",
+        "name": "500 FC Points",
+        "inGameItem": "FC Points",
+        "amount": 500,
+        "originalPrice": 199,
+        "price": 169,
+        "active": true
+      },
+      {
+        "id": "fcm-pkg-2",
+        "name": "1,050 FC Points",
+        "inGameItem": "FC Points",
+        "amount": 1050,
+        "originalPrice": 399,
+        "price": 349,
+        "active": true
+      },
+      {
+        "id": "fcm-pkg-3",
+        "name": "2,200 FC Points",
+        "inGameItem": "FC Points",
+        "amount": 2200,
+        "originalPrice": 799,
+        "price": 699,
+        "active": true
+      },
+      {
+        "id": "fcm-pkg-4",
+        "name": "5,750 FC Points",
+        "inGameItem": "FC Points",
+        "amount": 5750,
+        "originalPrice": 1990,
+        "price": 1750,
+        "isHot": true,
+        "active": true,
+        "badge": "🔥 ขายดี"
+      },
+      {
+        "id": "fcm-pkg-5",
+        "name": "12,000 FC Points",
+        "inGameItem": "FC Points",
+        "amount": 12000,
+        "originalPrice": 3990,
+        "price": 3500,
+        "isHot": true,
+        "active": true,
+        "badge": "👑 สต็อก VIP"
+      }
+    ]
+  },
+  {
+    "id": "genshin",
+    "name": "Genshin Impact",
+    "thaiName": "เกนชิน อิมแพกต์",
+    "aliases": [
+      "gi",
+      "genshin",
+      "hoyoverse"
+    ],
+    "publisher": "HoYoverse",
+    "category": "RPG",
+    "description": "เติม Genesis Crystals & พรแห่งดวงจันทร์ ราคาประหยัด ปลอดภัย 100% ผ่าน UID ตรงจากเซิร์ฟเวอร์",
+    "badge": "✨ ยอดนิยมตลอดกาล",
+    "active": true,
+    "todayRate": "เรท 0.82",
+    "bannerGradient": "from-indigo-600/40 via-purple-500/20 to-sky-900/40",
+    "accountField": {
+      "label": "Genshin UID",
+      "placeholder": "เช่น 801928374",
+      "helperText": "ดูได้จากมุมขวาล่างของหน้าจอเกม (UID 9 หลัก)",
+      "needsServerSelect": true,
+      "servers": [
+        "Asia",
+        "America",
+        "Europe",
+        "TW/HK/MO"
+      ]
+    },
+    "packages": [
+      {
+        "id": "gi-pkg-welkin",
+        "name": "พรแห่งดวงจันทร์ (Blessing of Welkin Moon)",
+        "inGameItem": "วันดวงจันทร์",
+        "amount": 30,
+        "originalPrice": 199,
+        "price": 169,
+        "isHot": true,
+        "active": true,
+        "badge": "🌙 ยอดฮิต"
+      },
+      {
+        "id": "gi-pkg-1",
+        "name": "300+30 Genesis Crystals",
+        "inGameItem": "Genesis Crystals",
+        "amount": 330,
+        "originalPrice": 199,
+        "price": 169,
+        "active": true
+      },
+      {
+        "id": "gi-pkg-2",
+        "name": "980+110 Genesis Crystals",
+        "inGameItem": "Genesis Crystals",
+        "amount": 1090,
+        "originalPrice": 599,
+        "price": 519,
+        "active": true
+      },
+      {
+        "id": "gi-pkg-3",
+        "name": "1,980+260 Genesis Crystals",
+        "inGameItem": "Genesis Crystals",
+        "amount": 2240,
+        "originalPrice": 1190,
+        "price": 1050,
+        "active": true
+      },
+      {
+        "id": "gi-pkg-4",
+        "name": "3,280+600 Genesis Crystals",
+        "inGameItem": "Genesis Crystals",
+        "amount": 3880,
+        "originalPrice": 1990,
+        "price": 1750,
+        "isHot": true,
+        "active": true,
+        "badge": "🔥 คุ้มค่า"
+      },
+      {
+        "id": "gi-pkg-5",
+        "name": "6,480+1,600 Genesis Crystals",
+        "inGameItem": "Genesis Crystals",
+        "amount": 8080,
+        "originalPrice": 3990,
+        "price": 3490,
+        "isHot": true,
+        "active": true,
+        "badge": "👑 สต็อกจุใจ"
+      }
+    ]
+  },
+  {
+    "id": "lastwar",
+    "name": "Last War: Survival",
+    "thaiName": "ลาสต์วอร์ เซอร์ไววัล",
+    "aliases": [
+      "lastwar",
+      "lw"
+    ],
+    "publisher": "FirstFun",
+    "category": "Casual",
+    "description": "เติมสต็อกเพชร Last War จัดส่งรวดเร็ว ราคาส่งสำหรับสายรบและสายฟาร์ม",
+    "badge": "🛡️ สายวางแผน",
+    "active": true,
+    "todayRate": "เรท 0.85",
+    "bannerGradient": "from-amber-700/40 via-orange-600/20 to-stone-900/40",
+    "accountField": {
+      "label": "Player ID / UID",
+      "placeholder": "เช่น 99887766",
+      "helperText": "กดรูปโปรไฟล์ซ้ายบนเพื่อดูรหัสผู้เล่น"
+    },
+    "packages": [
+      {
+        "id": "lw-pkg-1",
+        "name": "500 เพชร Last War",
+        "inGameItem": "เพชร",
+        "amount": 500,
+        "originalPrice": 199,
+        "price": 169,
+        "active": true
+      },
+      {
+        "id": "lw-pkg-2",
+        "name": "1,100 เพชร Last War",
+        "inGameItem": "เพชร",
+        "amount": 1100,
+        "originalPrice": 399,
+        "price": 349,
+        "active": true
+      },
+      {
+        "id": "lw-pkg-3",
+        "name": "2,500 เพชร Last War",
+        "inGameItem": "เพชร",
+        "amount": 2500,
+        "originalPrice": 890,
+        "price": 790,
+        "active": true
+      },
+      {
+        "id": "lw-pkg-4",
+        "name": "6,500 เพชร Last War",
+        "inGameItem": "เพชร",
+        "amount": 6500,
+        "originalPrice": 2190,
+        "price": 1890,
+        "isHot": true,
+        "active": true,
+        "badge": "🔥 สุดคุ้ม"
+      }
+    ]
+  },
+  {
+    "id": "summonerswar",
+    "name": "Summoners War",
+    "thaiName": "ซัมมอนเนอร์ส วอร์",
+    "aliases": [
+      "sw",
+      "com2us"
+    ],
+    "publisher": "Com2uS",
+    "category": "RPG",
+    "description": "เติมคริสตัลและแพ็กเกจรูน Summoners War ปลอดภัย ประสบการณ์เติมเกมส์มากกว่า 7 ปี",
+    "badge": "🔮 ตำนาน RPG",
+    "active": true,
+    "todayRate": "เรท 0.89",
+    "bannerGradient": "from-blue-600/40 via-cyan-500/20 to-indigo-950/40",
+    "accountField": {
+      "label": "Hive ID / UID",
+      "placeholder": "เช่น SW_User_1234",
+      "helperText": "ดูได้จากหน้าโปรไฟล์ผู้ซัมมอน"
+    },
+    "packages": [
+      {
+        "id": "sw-pkg-1",
+        "name": "250 Crystals",
+        "inGameItem": "Crystals",
+        "amount": 250,
+        "originalPrice": 199,
+        "price": 179,
+        "active": true
+      },
+      {
+        "id": "sw-pkg-2",
+        "name": "500 Crystals",
+        "inGameItem": "Crystals",
+        "amount": 500,
+        "originalPrice": 399,
+        "price": 349,
+        "active": true
+      },
+      {
+        "id": "sw-pkg-3",
+        "name": "1,400 Crystals",
+        "inGameItem": "Crystals",
+        "amount": 1400,
+        "originalPrice": 1190,
+        "price": 990,
+        "isHot": true,
+        "active": true,
+        "badge": "🔥 คุ้มค่า"
+      },
+      {
+        "id": "sw-pkg-4",
+        "name": "3,000 Crystals",
+        "inGameItem": "Crystals",
+        "amount": 3000,
+        "originalPrice": 2290,
+        "price": 1990,
+        "active": true
+      }
+    ]
+  },
+  {
+    "id": "hsr",
+    "name": "Honkai: Star Rail",
+    "thaiName": "ฮงไก สตาร์เรล",
+    "aliases": [
+      "hsr",
+      "starrail"
+    ],
+    "publisher": "HoYoverse",
+    "category": "RPG",
+    "description": "เติม Oneiric Shards & บัตรผ่านรถไฟนิรนาม ราคาส่ง ออกใบเสร็จตรวจสอบย้อนหลังได้ 24 ชม.",
+    "badge": "🚂 ท่องอวกาศ",
+    "active": true,
+    "todayRate": "เรท 0.82",
+    "bannerGradient": "from-violet-700/40 via-fuchsia-600/20 to-slate-900/40",
+    "accountField": {
+      "label": "UID ผู้บุกเบิก (Star Rail UID)",
+      "placeholder": "เช่น 800192837",
+      "helperText": "ดูได้จากเมนูโทรศัพท์มุมซ้ายบน (UID 9 หลัก)",
+      "needsServerSelect": true,
+      "servers": [
+        "Asia",
+        "America",
+        "Europe",
+        "TW/HK/MO"
+      ]
+    },
+    "packages": [
+      {
+        "id": "hsr-pkg-pass",
+        "name": "บัตรผ่านรถไฟนิรนาม (Express Supply Pass)",
+        "inGameItem": "บัตรรายเดือน",
+        "amount": 30,
+        "originalPrice": 199,
+        "price": 169,
+        "isHot": true,
+        "active": true,
+        "badge": "🌟 ยอดนิยม"
+      },
+      {
+        "id": "hsr-pkg-1",
+        "name": "300 Oneiric Shards",
+        "inGameItem": "Oneiric Shards",
+        "amount": 300,
+        "originalPrice": 199,
+        "price": 169,
+        "active": true
+      },
+      {
+        "id": "hsr-pkg-2",
+        "name": "980 Oneiric Shards",
+        "inGameItem": "Oneiric Shards",
+        "amount": 980,
+        "originalPrice": 599,
+        "price": 519,
+        "active": true
+      },
+      {
+        "id": "hsr-pkg-3",
+        "name": "1,980 Oneiric Shards",
+        "inGameItem": "Oneiric Shards",
+        "amount": 1980,
+        "originalPrice": 1190,
+        "price": 1050,
+        "active": true
+      },
+      {
+        "id": "hsr-pkg-4",
+        "name": "3,280 Oneiric Shards",
+        "inGameItem": "Oneiric Shards",
+        "amount": 3280,
+        "originalPrice": 1990,
+        "price": 1750,
+        "isHot": true,
+        "active": true,
+        "badge": "🔥 ขายดี"
+      },
+      {
+        "id": "hsr-pkg-5",
+        "name": "6,480 Oneiric Shards",
+        "inGameItem": "Oneiric Shards",
+        "amount": 6480,
+        "originalPrice": 3990,
+        "price": 3490,
+        "isHot": true,
+        "active": true,
+        "badge": "👑 สต็อก VIP"
+      }
+    ]
+  },
+  {
+    "id": "zzz",
+    "name": "Zenless Zone Zero",
+    "thaiName": "เซนเลส โซน ซีโร่",
+    "aliases": [
+      "zzz",
+      "zenless"
+    ],
+    "publisher": "HoYoverse",
+    "category": "RPG",
+    "description": "เติม Monochrome & สมาชิกอินเตอร์น็อต สต็อกปลอดภัย เชื่อมตรงระบบ",
+    "badge": "⚡ แอ็กชันไฟแรง",
+    "active": true,
+    "todayRate": "เรท 0.82",
+    "bannerGradient": "from-amber-500/40 via-lime-500/20 to-neutral-950/40",
+    "accountField": {
+      "label": "ZZZ UID ผู้เชื่อมโยง",
+      "placeholder": "เช่น 150029384",
+      "helperText": "ดูได้จากหน้าข้อมูลผู้เชื่อมโยงในเกม",
+      "needsServerSelect": true,
+      "servers": [
+        "Asia",
+        "America",
+        "Europe",
+        "TW/HK/MO"
+      ]
+    },
+    "packages": [
+      {
+        "id": "zzz-pkg-sub",
+        "name": "สมาชิกอินเตอร์น็อต (Inter-Knot Membership)",
+        "inGameItem": "สมาชิกรายเดือน",
+        "amount": 30,
+        "originalPrice": 199,
+        "price": 169,
+        "isHot": true,
+        "active": true,
+        "badge": "🔋 ประหยัดสุด"
+      },
+      {
+        "id": "zzz-pkg-1",
+        "name": "300 Monochrome",
+        "inGameItem": "Monochrome",
+        "amount": 300,
+        "originalPrice": 199,
+        "price": 169,
+        "active": true
+      },
+      {
+        "id": "zzz-pkg-2",
+        "name": "980 Monochrome",
+        "inGameItem": "Monochrome",
+        "amount": 980,
+        "originalPrice": 599,
+        "price": 519,
+        "active": true
+      },
+      {
+        "id": "zzz-pkg-3",
+        "name": "1,980 Monochrome",
+        "inGameItem": "Monochrome",
+        "amount": 1980,
+        "originalPrice": 1190,
+        "price": 1050,
+        "active": true
+      },
+      {
+        "id": "zzz-pkg-4",
+        "name": "3,280 Monochrome",
+        "inGameItem": "Monochrome",
+        "amount": 3280,
+        "originalPrice": 1990,
+        "price": 1750,
+        "isHot": true,
+        "active": true,
+        "badge": "🔥 คุ้มค่า"
+      },
+      {
+        "id": "zzz-pkg-5",
+        "name": "6,480 Monochrome",
+        "inGameItem": "Monochrome",
+        "amount": 6480,
+        "originalPrice": 3990,
+        "price": 3490,
+        "isHot": true,
+        "active": true,
+        "badge": "👑 สต็อก VIP"
+      }
+    ]
+  },
+  {
+    "id": "wutheringwaves",
+    "name": "Wuthering Waves",
+    "thaiName": "เวเธอริง เวฟส์",
+    "aliases": [
+      "wuwa",
+      "kuro"
+    ],
+    "publisher": "Kuro Games",
+    "category": "RPG",
+    "description": "เติม Lunite & Lunite Subscription สต็อกปลอดภัย ไว้วางใจได้",
+    "badge": "🌊 Open-World RPG",
+    "active": true,
+    "todayRate": "เรท 0.82",
+    "bannerGradient": "from-teal-600/40 via-cyan-500/20 to-slate-950/40",
+    "accountField": {
+      "label": "Rover UID (User ID)",
+      "placeholder": "เช่น 900293847",
+      "helperText": "ดูได้จากหน้าจอโปรไฟล์ผู้พเนจรในเกม",
+      "needsServerSelect": true,
+      "servers": [
+        "Asia",
+        "America",
+        "Europe",
+        "SEA",
+        "HMT"
+      ]
+    },
+    "packages": [
+      {
+        "id": "wuwa-pkg-sub",
+        "name": "Lunite Subscription (รายเดือน)",
+        "inGameItem": "บัตรรายเดือน",
+        "amount": 30,
+        "originalPrice": 199,
+        "price": 169,
+        "isHot": true,
+        "active": true,
+        "badge": "🌊 สุดคุ้ม"
+      },
+      {
+        "id": "wuwa-pkg-1",
+        "name": "300 Lunite",
+        "inGameItem": "Lunite",
+        "amount": 300,
+        "originalPrice": 199,
+        "price": 169,
+        "active": true
+      },
+      {
+        "id": "wuwa-pkg-2",
+        "name": "980 Lunite",
+        "inGameItem": "Lunite",
+        "amount": 980,
+        "originalPrice": 599,
+        "price": 519,
+        "active": true
+      },
+      {
+        "id": "wuwa-pkg-3",
+        "name": "1,980 Lunite",
+        "inGameItem": "Lunite",
+        "amount": 1980,
+        "originalPrice": 1190,
+        "price": 1050,
+        "active": true
+      },
+      {
+        "id": "wuwa-pkg-4",
+        "name": "3,280 Lunite",
+        "inGameItem": "Lunite",
+        "amount": 3280,
+        "originalPrice": 1990,
+        "price": 1750,
+        "isHot": true,
+        "active": true,
+        "badge": "🔥 ขายดี"
+      },
+      {
+        "id": "wuwa-pkg-5",
+        "name": "6,480 Lunite",
+        "inGameItem": "Lunite",
+        "amount": 6480,
+        "originalPrice": 3990,
+        "price": 3490,
+        "isHot": true,
+        "active": true,
+        "badge": "👑 สต็อก VIP"
+      }
+    ]
+  },
+  {
+    "id": "callofduty",
+    "name": "Call of Duty: Mobile",
+    "thaiName": "คอลออฟดิวตี โมบาย",
+    "aliases": [
+      "codm",
+      "cod"
+    ],
+    "publisher": "Garena / Activision",
+    "category": "FPS",
+    "description": "เติม CP สต็อก iOS ราคาถูกที่สุด ยิงยาวไม่มีสะดุด ปลอดภัย 100%",
+    "badge": "🎯 ยอดนิยมสาย FPS",
+    "active": true,
+    "todayRate": "เรท 0.88",
+    "bannerGradient": "from-amber-600/40 via-red-600/20 to-neutral-950/40",
+    "accountField": {
+      "label": "OpenID / UID",
+      "placeholder": "เช่น 67492810482910294",
+      "helperText": "ดูได้จากหน้า Settings > Legal & Privacy > OpenID ในเกม"
+    },
+    "packages": [
+      {
+        "id": "cod-pkg-1",
+        "name": "80 CP",
+        "inGameItem": "CP",
+        "amount": 80,
+        "originalPrice": 39,
+        "price": 35,
+        "active": true
+      },
+      {
+        "id": "cod-pkg-2",
+        "name": "420 CP",
+        "inGameItem": "CP",
+        "amount": 420,
+        "originalPrice": 199,
+        "price": 175,
+        "active": true
+      },
+      {
+        "id": "cod-pkg-3",
+        "name": "880 CP",
+        "inGameItem": "CP",
+        "amount": 880,
+        "originalPrice": 399,
+        "price": 350,
+        "active": true
+      },
+      {
+        "id": "cod-pkg-4",
+        "name": "2,400 CP",
+        "inGameItem": "CP",
+        "amount": 2400,
+        "originalPrice": 999,
+        "price": 900,
+        "isHot": true,
+        "active": true,
+        "badge": "🔥 ขายดี"
+      },
+      {
+        "id": "cod-pkg-5",
+        "name": "5,000 CP",
+        "inGameItem": "CP",
+        "amount": 5000,
+        "originalPrice": 1990,
+        "price": 1750,
+        "active": true
+      },
+      {
+        "id": "cod-pkg-6",
+        "name": "10,800 CP",
+        "inGameItem": "CP",
+        "amount": 10800,
+        "originalPrice": 3990,
+        "price": 3500,
+        "isHot": true,
+        "active": true,
+        "badge": "👑 สต็อก VIP"
+      }
+    ]
+  },
+  {
+    "id": "pokemongo",
+    "name": "Pokémon GO",
+    "thaiName": "โปเกมอน โก",
+    "aliases": [
+      "pogo",
+      "niantic"
+    ],
+    "publisher": "Niantic",
+    "category": "Casual",
+    "description": "เติมเหรียญ PokéCoins ราคาสบายกระเป๋า สต็อกส่งตรง ปลอดภัย",
+    "badge": "🔴 สายเทรนเนอร์",
+    "active": true,
+    "todayRate": "เรท 0.85",
+    "bannerGradient": "from-rose-600/40 via-blue-500/20 to-slate-900/40",
+    "accountField": {
+      "label": "Trainer Nickname / Email",
+      "placeholder": "เช่น Ash_ThaiTrainer หรือ อีเมลบัญชี",
+      "helperText": "ระบุชื่อเทรนเนอร์หรืออีเมลที่ผูกกับเกม"
+    },
+    "packages": [
+      {
+        "id": "pogo-pkg-1",
+        "name": "100 PokéCoins",
+        "inGameItem": "PokéCoins",
+        "amount": 100,
+        "originalPrice": 39,
+        "price": 35,
+        "active": true
+      },
+      {
+        "id": "pogo-pkg-2",
+        "name": "550 PokéCoins",
+        "inGameItem": "PokéCoins",
+        "amount": 550,
+        "originalPrice": 199,
+        "price": 175,
+        "active": true
+      },
+      {
+        "id": "pogo-pkg-3",
+        "name": "1,200 PokéCoins",
+        "inGameItem": "PokéCoins",
+        "amount": 1200,
+        "originalPrice": 399,
+        "price": 350,
+        "active": true
+      },
+      {
+        "id": "pogo-pkg-4",
+        "name": "2,500 PokéCoins",
+        "inGameItem": "PokéCoins",
+        "amount": 2500,
+        "originalPrice": 790,
+        "price": 700,
+        "isHot": true,
+        "active": true,
+        "badge": "🔥 ขายดี"
+      },
+      {
+        "id": "pogo-pkg-5",
+        "name": "5,200 PokéCoins",
+        "inGameItem": "PokéCoins",
+        "amount": 5200,
+        "originalPrice": 1590,
+        "price": 1400,
+        "active": true
+      },
+      {
+        "id": "pogo-pkg-6",
+        "name": "14,500 PokéCoins",
+        "inGameItem": "PokéCoins",
+        "amount": 14500,
+        "originalPrice": 3990,
+        "price": 3500,
+        "isHot": true,
+        "active": true,
+        "badge": "👑 สต็อก VIP"
+      }
+    ]
+  },
+  {
+    "id": "pokemontcg",
+    "name": "Pokémon TCG Pocket",
+    "thaiName": "โปเกมอน เทรดดิงการ์ด พ็อกเก็ต",
+    "aliases": [
+      "tcg",
+      "ptcgp"
+    ],
+    "publisher": "The Pokémon Company",
+    "category": "Casual",
+    "description": "เติมทอง Poké Gold สำหรับเปิดซองการ์ดและสะสม สต็อกส่งไว ปลอดภัย 100%",
+    "badge": "🃏 การ์ดโปเกมอนยอดฮิต",
+    "active": true,
+    "todayRate": "เรท 0.88",
+    "bannerGradient": "from-amber-500/40 via-red-500/20 to-violet-950/40",
+    "accountField": {
+      "label": "Support ID / Player ID",
+      "placeholder": "เช่น 1234-5678-9012-3456",
+      "helperText": "ดูได้จากหน้าจอหลัก > Other > Support ID (16 หลัก)"
+    },
+    "packages": [
+      {
+        "id": "tcg-pkg-1",
+        "name": "6 Poké Gold",
+        "inGameItem": "Poké Gold",
+        "amount": 6,
+        "originalPrice": 45,
+        "price": 39,
+        "active": true
+      },
+      {
+        "id": "tcg-pkg-2",
+        "name": "30 Poké Gold",
+        "inGameItem": "Poké Gold",
+        "amount": 30,
+        "originalPrice": 199,
+        "price": 179,
+        "active": true
+      },
+      {
+        "id": "tcg-pkg-3",
+        "name": "60 Poké Gold",
+        "inGameItem": "Poké Gold",
+        "amount": 60,
+        "originalPrice": 399,
+        "price": 349,
+        "active": true
+      },
+      {
+        "id": "tcg-pkg-4",
+        "name": "120 Poké Gold",
+        "inGameItem": "Poké Gold",
+        "amount": 120,
+        "originalPrice": 790,
+        "price": 699,
+        "isHot": true,
+        "active": true,
+        "badge": "🔥 สุดคุ้ม"
+      },
+      {
+        "id": "tcg-pkg-5",
+        "name": "300 Poké Gold",
+        "inGameItem": "Poké Gold",
+        "amount": 300,
+        "originalPrice": 1890,
+        "price": 1690,
+        "active": true
+      },
+      {
+        "id": "tcg-pkg-6",
+        "name": "500 Poké Gold",
+        "inGameItem": "Poké Gold",
+        "amount": 500,
+        "originalPrice": 3190,
+        "price": 2790,
+        "isHot": true,
+        "active": true,
+        "badge": "👑 สต็อก VIP"
+      }
+    ]
+  }
+]

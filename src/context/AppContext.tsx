@@ -38,6 +38,7 @@ import {
   saveSingleGameToServer,
   addPackageToServer,
   deletePackageFromServer,
+  subscribeToLiveEvents,
 } from '../services/persistentStorageService';
 import { PAYMENT_CONFIG } from '../utils/promptpay';
 import { formatPackageQuantityTag, formatOrderPackagesNotation, getOrderItems } from '../utils/orderHelper';
@@ -201,6 +202,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const LOCAL_STORAGE_GAMES = 'gamepay_games_v2';
 const LOCAL_STORAGE_ORDERS = 'gamepay_orders_v2';
+const LOCAL_STORAGE_VAULT = 'gamepay_orders_vault_permanent';
 const LOCAL_STORAGE_DELETED_ORDERS = 'gamepay_deleted_orders_v2';
 const LOCAL_STORAGE_DEALERS = 'gamepay_dealers_v2';
 const LOCAL_STORAGE_WEBHOOK = 'gamepay_webhook_v2';
@@ -270,37 +272,47 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return [];
   });
 
-  // Load Orders with auto-migration to shop notation (e.g. 12800x10 5700x10 3250x2)
+  // Load Orders with guaranteed seeding of all customer orders + localStorage merge + permanent vault recovery
   const [orders, setOrders] = useState<TopUpOrder[]>(() => {
     try {
+      localStorage.removeItem(LOCAL_STORAGE_DELETED_ORDERS);
       const saved = localStorage.getItem(LOCAL_STORAGE_ORDERS);
-      const savedDeleted = localStorage.getItem(LOCAL_STORAGE_DELETED_ORDERS);
-      const deletedSet = new Set<string>();
-      if (savedDeleted) {
+      const vaultSaved = localStorage.getItem(LOCAL_STORAGE_VAULT);
+      const orderMap = new Map<string, TopUpOrder>();
+      INITIAL_TOPUP_ORDERS.forEach((o) => orderMap.set(o.id, o));
+      if (vaultSaved) {
         try {
-          const parsedDeleted = JSON.parse(savedDeleted);
-          if (Array.isArray(parsedDeleted)) parsedDeleted.forEach((id: string) => deletedSet.add(id));
+          const parsedVault: TopUpOrder[] = JSON.parse(vaultSaved);
+          if (Array.isArray(parsedVault)) {
+            parsedVault.forEach((o) => {
+              if (o && o.id && o.id !== 'GP-TEST-SYNC-1') orderMap.set(o.id, o);
+            });
+          }
         } catch (_) {}
       }
-
       if (saved) {
-        const parsed: TopUpOrder[] = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return parsed
-            .filter((o) => !deletedSet.has(o.id))
-            .map((o) => {
-              const notation = formatOrderPackagesNotation(o);
-              if (notation && (o.packageName?.includes('และอีก') || o.gameName?.includes('และอื่นๆ'))) {
-                return {
-                  ...o,
-                  packageName: notation,
-                  gameName: o.gameName.replace(/ และอื่นๆ.*$/, ''),
-                };
+        try {
+          const parsed: TopUpOrder[] = JSON.parse(saved);
+          if (Array.isArray(parsed)) {
+            parsed.forEach((o) => {
+              if (o && o.id && o.id !== 'GP-TEST-SYNC-1') {
+                const notation = formatOrderPackagesNotation(o);
+                const cleanOrder = notation && (o.packageName?.includes('และอีก') || o.gameName?.includes('และอื่นๆ'))
+                  ? { ...o, packageName: notation, gameName: o.gameName.replace(/ และอื่นๆ.*$/, '') }
+                  : o;
+                orderMap.set(cleanOrder.id, cleanOrder);
               }
-              return o;
             });
-        }
+          }
+        } catch (_) {}
       }
+      const initialList = Array.from(orderMap.values());
+      initialList.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+      try {
+        localStorage.setItem(LOCAL_STORAGE_ORDERS, JSON.stringify(initialList));
+        localStorage.setItem(LOCAL_STORAGE_VAULT, JSON.stringify(initialList));
+      } catch (_) {}
+      return initialList;
     } catch (e) {
       console.error('Failed to load orders from localStorage', e);
     }
@@ -425,56 +437,31 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         });
       }
 
-      if (serverData.orders && serverData.orders.length > 0) {
+      if (serverData.orders && Array.isArray(serverData.orders)) {
         setOrders((prev) => {
-          const deletedSet = new Set<string>();
-          try {
-            const raw = localStorage.getItem(LOCAL_STORAGE_DELETED_ORDERS);
-            if (raw) {
-              const parsed = JSON.parse(raw);
-              if (Array.isArray(parsed)) parsed.forEach((id: string) => deletedSet.add(id));
-            }
-          } catch (_) {}
-          if (serverData.deletedOrderIds) {
-            serverData.deletedOrderIds.forEach((id: string) => deletedSet.add(id));
-          }
-
           const map = new Map<string, TopUpOrder>();
-          // Server disk is permanent truth (excluding permanently deleted)
-          serverData.orders
-            .filter((o) => !deletedSet.has(o.id))
-            .forEach((o) => map.set(o.id, o));
+          INITIAL_TOPUP_ORDERS.forEach((o) => map.set(o.id, o));
+          serverData.orders.forEach((o) => {
+            if (o && o.id && o.id !== 'GP-TEST-SYNC-1') map.set(o.id, o);
+          });
 
-          // Only keep local orders if NOT deleted and created within the last 20 seconds
-          const now = Date.now();
+          // Preserve all existing customer orders so no order is ever lost
           prev.forEach((o) => {
-            if (!map.has(o.id) && !deletedSet.has(o.id)) {
-              const orderTime = new Date(o.createdAt).getTime();
-              if (now - orderTime < 20000) {
+            if (o && o.id && o.id !== 'GP-TEST-SYNC-1' && !serverData.deletedOrderIds?.includes(o.id)) {
+              if (!map.has(o.id)) {
                 map.set(o.id, o);
                 saveOrderToServer(o);
               }
             }
           });
           const merged = Array.from(map.values());
+          merged.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
           try {
             localStorage.setItem(LOCAL_STORAGE_ORDERS, JSON.stringify(merged));
+            localStorage.setItem(LOCAL_STORAGE_VAULT, JSON.stringify(merged));
           } catch (_) {}
           return merged;
         });
-      } else if (orders.length > 0) {
-        const deletedSet = new Set<string>();
-        try {
-          const raw = localStorage.getItem(LOCAL_STORAGE_DELETED_ORDERS);
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed)) parsed.forEach((id: string) => deletedSet.add(id));
-          }
-        } catch (_) {}
-        const nonDeleted = orders.filter((o) => !deletedSet.has(o.id));
-        if (nonDeleted.length > 0) {
-          saveOrdersBatchToServer(nonDeleted);
-        }
       }
 
       if (serverData.customers && serverData.customers.length > 0) {
@@ -484,13 +471,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           prev.forEach((c) => {
             if (!map.has(c.id)) {
               map.set(c.id, c);
-              saveCustomerToServer(c);
             }
           });
-          return Array.from(map.values());
+          const merged = Array.from(map.values());
+          try {
+            localStorage.setItem(LOCAL_STORAGE_CUSTOMER_USERS, JSON.stringify(merged));
+          } catch (_) {}
+          return merged;
         });
-      } else if (customerUsers.length > 0) {
-        saveCustomersBatchToServer(customerUsers);
       }
 
       if (serverData.settings?.paymentConfig) {
@@ -516,38 +504,34 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const refreshOrders = useCallback(async () => {
     try {
-      const res = await fetch('/api/data/orders');
+      const res = await fetch(`/api/data/orders?_t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache, no-store' },
+      });
       if (res.ok) {
         const serverOrders: TopUpOrder[] = await res.json();
         if (Array.isArray(serverOrders)) {
-          const deletedSet = new Set<string>();
-          try {
-            const raw = localStorage.getItem(LOCAL_STORAGE_DELETED_ORDERS);
-            if (raw) {
-              const parsed = JSON.parse(raw);
-              if (Array.isArray(parsed)) parsed.forEach((id: string) => deletedSet.add(id));
-            }
-          } catch (_) {}
-
-          const activeServerOrders = serverOrders.filter((o) => !deletedSet.has(o.id));
-
           setOrders((prev) => {
             const map = new Map<string, TopUpOrder>();
-            activeServerOrders.forEach((o) => map.set(o.id, o));
+            INITIAL_TOPUP_ORDERS.forEach((o) => map.set(o.id, o));
+            serverOrders.forEach((o) => {
+              if (o && o.id && o.id !== 'GP-TEST-SYNC-1') map.set(o.id, o);
+            });
 
-            // Only preserve brand-new local orders placed in last 20 seconds that haven't hit server yet
-            const now = Date.now();
+            // Keep all existing orders
             prev.forEach((o) => {
-              if (!map.has(o.id) && !deletedSet.has(o.id)) {
-                const orderTime = new Date(o.createdAt).getTime();
-                if (now - orderTime < 20000) {
+              if (o && o.id && o.id !== 'GP-TEST-SYNC-1') {
+                if (!map.has(o.id)) {
                   map.set(o.id, o);
+                  saveOrderToServer(o);
                 }
               }
             });
             const updated = Array.from(map.values());
+            updated.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
             try {
               localStorage.setItem(LOCAL_STORAGE_ORDERS, JSON.stringify(updated));
+              localStorage.setItem(LOCAL_STORAGE_VAULT, JSON.stringify(updated));
             } catch (_) {}
             return updated;
           });
@@ -561,11 +545,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   useEffect(() => {
     try {
       localStorage.setItem(LOCAL_STORAGE_CUSTOMER_USERS, JSON.stringify(customerUsers));
-      if (customerUsers && customerUsers.length > 0) {
-        saveCustomersBatchToServer(customerUsers);
-      }
     } catch (e) {
-      console.error('Failed to save customerUsers', e);
+      console.error('Failed to save customerUsers to localStorage', e);
     }
   }, [customerUsers]);
 
@@ -658,16 +639,85 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [games]);
 
   // Real-time synchronization across all devices (phones, computers, browsers)
+  // Powered by Server-Sent Events (SSE) with fast 3-second polling fallback
   useEffect(() => {
     let active = true;
+
+    // 1. Instant Real-Time Push via Server-Sent Events (SSE)
+    const unsubscribeSSE = subscribeToLiveEvents({
+      onOrdersUpdated: (serverOrders) => {
+        if (!active || !Array.isArray(serverOrders)) return;
+
+        setOrders((prev) => {
+          const map = new Map<string, TopUpOrder>();
+          INITIAL_TOPUP_ORDERS.forEach((o) => map.set(o.id, o));
+          // Server disk is source of truth
+          serverOrders.forEach((o) => {
+            if (o && o.id && o.id !== 'GP-TEST-SYNC-1') map.set(o.id, o);
+          });
+
+          // Detect if any brand new orders arrived that were not in prev
+          const prevIds = new Set(prev.map((o) => o.id));
+          const newIncomingOrders = serverOrders.filter((o) => !prevIds.has(o.id) && o.id !== 'GP-TEST-SYNC-1');
+          if (newIncomingOrders.length > 0 && isAdminLoggedIn) {
+            soundService.playNotificationSound();
+            const first = newIncomingOrders[0];
+            setNotificationState({
+              type: 'info',
+              message: `🔔 มีคำสั่งซื้อใหม่จากลูกค้า! รหัส ${first.id} (${first.gameName} - ฿${first.price.toLocaleString()})`,
+            });
+          }
+
+          // Keep all existing customer orders safe and never drop
+          prev.forEach((o) => {
+            if (o && o.id && o.id !== 'GP-TEST-SYNC-1') {
+              if (!map.has(o.id)) {
+                map.set(o.id, o);
+                saveOrderToServer(o);
+              }
+            }
+          });
+
+          const mergedOrders = Array.from(map.values());
+          mergedOrders.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+          try {
+            localStorage.setItem(LOCAL_STORAGE_ORDERS, JSON.stringify(mergedOrders));
+            localStorage.setItem(LOCAL_STORAGE_VAULT, JSON.stringify(mergedOrders));
+          } catch (_) {}
+          return mergedOrders;
+        });
+      },
+      onGamesUpdated: (serverGames) => {
+        if (!active || !Array.isArray(serverGames) || serverGames.length === 0) return;
+        // Don't interrupt if admin is actively typing inside an edit input
+        if (lastLocalGameUpdateRef.current > 0 && Date.now() - lastLocalGameUpdateRef.current < 5000) return;
+        setGames(serverGames);
+        try {
+          localStorage.setItem(LOCAL_STORAGE_GAMES, JSON.stringify(serverGames));
+        } catch (_) {}
+      },
+      onCustomersUpdated: (serverCustomers) => {
+        if (!active || !Array.isArray(serverCustomers) || serverCustomers.length === 0) return;
+        setCustomerUsers(serverCustomers);
+        try {
+          localStorage.setItem(LOCAL_STORAGE_CUSTOMER_USERS, JSON.stringify(serverCustomers));
+        } catch (_) {}
+      },
+      onSettingsUpdated: (serverSettings) => {
+        if (!active || !serverSettings) return;
+        if (serverSettings.paymentConfig) {
+          setPaymentConfig((prev) => ({ ...prev, ...serverSettings.paymentConfig }));
+        }
+      },
+    });
+
+    // 2. High-Reliability Periodic Polling (every 3 seconds)
     const syncAcrossDevices = () => {
-      if (typeof document !== 'undefined' && document.hidden) return; // Save bandwidth when tab inactive
       fetchServerData().then((serverData) => {
         if (!active || !serverData) return;
 
-        // 1. Sync games, prices, packages, and thumbnails across all devices
-        // Protect local edits within 20 seconds so freshly updated prices/names never bounce back
-        if (serverData.games && serverData.games.length > 0 && (lastLocalGameUpdateRef.current === 0 || Date.now() - lastLocalGameUpdateRef.current >= 20000)) {
+        // 1. Sync games across all devices
+        if (serverData.games && serverData.games.length > 0 && (lastLocalGameUpdateRef.current === 0 || Date.now() - lastLocalGameUpdateRef.current >= 5000)) {
           setGames((prev) => {
             const serverGameMap = new Map<string, Game>();
             serverData.games!.forEach((g) => serverGameMap.set(g.id, g));
@@ -715,40 +765,62 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             return prev;
           });
         }
+
+        // 3. Sync orders across all devices
+        if (serverData.orders && Array.isArray(serverData.orders)) {
+          setOrders((prev) => {
+            const map = new Map<string, TopUpOrder>();
+            INITIAL_TOPUP_ORDERS.forEach((o) => map.set(o.id, o));
+            serverData.orders.forEach((o) => {
+              if (o && o.id && o.id !== 'GP-TEST-SYNC-1') map.set(o.id, o);
+            });
+
+            // Preserve all existing customer orders and auto-upload un-synced orders
+            prev.forEach((o) => {
+              if (o && o.id && o.id !== 'GP-TEST-SYNC-1') {
+                if (!map.has(o.id)) {
+                  map.set(o.id, o);
+                  saveOrderToServer(o);
+                }
+              }
+            });
+
+            const mergedOrders = Array.from(map.values());
+            mergedOrders.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+            const prevStr = JSON.stringify(prev);
+            const nextStr = JSON.stringify(mergedOrders);
+            if (prevStr !== nextStr) {
+              try {
+                localStorage.setItem(LOCAL_STORAGE_ORDERS, nextStr);
+                localStorage.setItem(LOCAL_STORAGE_VAULT, nextStr);
+              } catch (_) {}
+              return mergedOrders;
+            }
+            return prev;
+          });
+        }
       });
     };
 
     window.addEventListener('focus', syncAcrossDevices);
     document.addEventListener('visibilitychange', syncAcrossDevices);
-    const syncInterval = setInterval(syncAcrossDevices, 4000); // Poll every 4 seconds for instant cross-device updates
+    const syncInterval = setInterval(syncAcrossDevices, 3000); // 3 seconds polling fallback
 
     return () => {
       active = false;
+      unsubscribeSSE();
       window.removeEventListener('focus', syncAcrossDevices);
       document.removeEventListener('visibilitychange', syncAcrossDevices);
       clearInterval(syncInterval);
     };
-  }, []);
+  }, [isAdminLoggedIn]);
 
+  // Persist orders to localStorage cleanly (server persistence is handled via dedicated action calls)
   useEffect(() => {
     try {
       localStorage.setItem(LOCAL_STORAGE_ORDERS, JSON.stringify(orders));
-      if (orders && orders.length > 0) {
-        let deletedSet = new Set<string>();
-        try {
-          const raw = localStorage.getItem(LOCAL_STORAGE_DELETED_ORDERS);
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed)) parsed.forEach((id: string) => deletedSet.add(id));
-          }
-        } catch (_) {}
-        const nonDeleted = orders.filter((o) => !deletedSet.has(o.id));
-        if (nonDeleted.length > 0) {
-          saveOrdersBatchToServer(nonDeleted);
-        }
-      }
     } catch (e) {
-      console.error('Error saving orders', e);
+      console.error('Error saving orders to localStorage', e);
     }
   }, [orders]);
 
@@ -981,7 +1053,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       updatedAt: timestamp.toISOString(),
     };
 
-    setOrders((prev) => [newOrder, ...prev]);
+    setOrders((prev) => {
+      const updated = [newOrder, ...prev];
+      try {
+        localStorage.setItem(LOCAL_STORAGE_ORDERS, JSON.stringify(updated));
+        localStorage.setItem(LOCAL_STORAGE_VAULT, JSON.stringify(updated));
+      } catch (_) {}
+      return updated;
+    });
+    saveOrderToServer(newOrder, 5);
     clearCart();
     setIsCartOpen(false);
     setCurrentOrderForPayment(newOrder);
@@ -1114,7 +1194,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       updatedAt: timestamp.toISOString(),
     };
 
-    setOrders((prev) => [newOrder, ...prev]);
+    setOrders((prev) => {
+      const updated = [newOrder, ...prev];
+      try {
+        localStorage.setItem(LOCAL_STORAGE_ORDERS, JSON.stringify(updated));
+        localStorage.setItem(LOCAL_STORAGE_VAULT, JSON.stringify(updated));
+      } catch (_) {}
+      return updated;
+    });
+    saveOrderToServer(newOrder, 5);
     setCurrentOrderForPayment(newOrder);
     setIsPaymentModalOpen(true);
     soundService.playSuccessSound();
@@ -1174,6 +1262,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           setCurrentOrderForPayment(updatedOrder);
         }
 
+        saveOrderToServer(updatedOrder);
         triggerWebhookAlert(updatedOrder, 'paid');
         pushOrderToGoogleSheets(updatedOrder).catch(() => null);
         return updatedOrder;
@@ -1224,6 +1313,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           setCurrentOrderForPayment(updatedOrder);
         }
 
+        saveOrderToServer(updatedOrder);
         triggerWebhookAlert(updatedOrder, 'paid');
         return updatedOrder;
       })
@@ -1236,7 +1326,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         prev.map((ord) => {
           if (ord.id !== orderId) return ord;
           const processTime = new Date().toLocaleTimeString('th-TH');
-          return {
+          const procOrder: TopUpOrder = {
             ...ord,
             status: 'processing',
             timeline: [
@@ -1250,6 +1340,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             ],
             updatedAt: new Date().toISOString(),
           };
+          saveOrderToServer(procOrder);
+          return procOrder;
         })
       );
     }, 1600);
@@ -1274,6 +1366,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             ],
             updatedAt: new Date().toISOString(),
           };
+          saveOrderToServer(doneOrder);
           setLastCompletedOrder(doneOrder);
           triggerWebhookAlert(doneOrder, 'delivered');
           return doneOrder;
@@ -1290,18 +1383,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }, 3600);
   };
 
-  // Delete Order (ลบออเดอร์ออกจากระบบและเซิร์ฟเวอร์ถาวร ไม่เด้งกลับมาอีกต่อไป)
+  // Delete Order (ลบออเดอร์ออกจากระบบและเซิร์ฟเวอร์ถาวร)
   const deleteOrder = async (orderId: string): Promise<boolean> => {
-    // 1. Immediately blacklist orderId locally and in localStorage
-    setDeletedOrderIds((prev) => {
-      const next = Array.from(new Set([...prev, orderId]));
-      try {
-        localStorage.setItem(LOCAL_STORAGE_DELETED_ORDERS, JSON.stringify(next));
-      } catch (_) {}
-      return next;
-    });
-
-    // 2. Immediately remove from local state and update localStorage
+    // 1. Immediately remove from local state and update localStorage
     setOrders((prev) => {
       const remaining = prev.filter((o) => o.id !== orderId);
       try {
@@ -1310,7 +1394,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return remaining;
     });
 
-    // 3. Delete permanently on server disk (records tombstone)
+    // 2. Delete permanently on server disk
     try {
       await deleteOrderFromServer(orderId);
     } catch (e) {
@@ -1320,7 +1404,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     soundService.playNotificationSound();
     setNotification({
       type: 'info',
-      message: `ลบออเดอร์ ${orderId} ออกจากระบบถาวรเรียบร้อยแล้ว`,
+      message: `ลบออเดอร์ ${orderId} ออกจากระบบเรียบร้อยแล้ว`,
     });
     return true;
   };
@@ -1392,6 +1476,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       createdBy: 'แอดมิน (สร้างมือ)',
     };
     setCustomerUsers((prev) => [newUser, ...prev]);
+    saveCustomerToServer(newUser);
     setNotification({
       type: 'success',
       message: `สมัครยูสเซอร์ "${newUser.username}" (${newUser.customerName}) สำเร็จเรียบร้อย`,
@@ -1401,7 +1486,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const updateCustomerUser = (id: string, updates: Partial<CustomerUser>) => {
     setCustomerUsers((prev) =>
-      prev.map((u) => (u.id === id ? { ...u, ...updates } : u))
+      prev.map((u) => {
+        if (u.id !== id) return u;
+        const updated = { ...u, ...updates };
+        saveCustomerToServer(updated);
+        return updated;
+      })
     );
     if (currentCustomerUser?.id === id) {
       setCurrentCustomerUser((prev) => (prev ? { ...prev, ...updates } : null));
@@ -1429,7 +1519,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       prev.map((u) => {
         if (u.id !== id) return u;
         const newBal = Math.max(0, u.balance + amount);
-        return { ...u, balance: newBal };
+        const updated = { ...u, balance: newBal };
+        saveCustomerToServer(updated);
+        return updated;
       })
     );
     if (currentCustomerUser?.id === id) {
@@ -1465,6 +1557,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const updated: CustomerUser = { ...found, lastLoginAt: new Date().toISOString() };
     setCurrentCustomerUser(updated);
     setCustomerUsers((prev) => prev.map((u) => (u.id === found.id ? updated : u)));
+    saveCustomerToServer(updated);
     setNotification({
       type: 'success',
       message: `ยินดีต้อนรับคุณ ${found.customerName} (${found.username}) เข้าสู่ระบบราคาส่ง`,
@@ -1856,6 +1949,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         } else if (newStatus === 'verifying') {
           triggerWebhookAlert(updatedOrd, 'paid');
         }
+        saveOrderToServer(updatedOrd);
         return updatedOrd;
       })
     );
