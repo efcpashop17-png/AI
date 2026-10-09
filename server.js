@@ -1,10 +1,12 @@
+// server.ts
 import "dotenv/config";
 import express from "express";
 import path from "path";
 import fs from "fs";
-const app = express();
-const PORT = process.env.PORT || 3e3;
-const EASYSLIP_TOKEN = process.env.EASYSLIP_API_KEY || "c16cec69-0221-40c7-a2e1-71abd59a745c";
+import crypto from "crypto";
+var app = express();
+var PORT = process.env.PORT || 3e3;
+var EASYSLIP_TOKEN = process.env.EASYSLIP_API_KEY || "c16cec69-0221-40c7-a2e1-71abd59a745c";
 app.use(express.json({ limit: "25mb" }));
 app.use(express.urlencoded({ extended: true, limit: "25mb" }));
 app.use("/api", (_req, res, next) => {
@@ -13,6 +15,20 @@ app.use("/api", (_req, res, next) => {
   res.setHeader("Expires", "0");
   res.setHeader("Surrogate-Control", "no-store");
   next();
+});
+var slipVerificationCache = /* @__PURE__ */ new Map();
+app.get("/api/easyslip/info", async (_req, res) => {
+  try {
+    const response = await fetch("https://api.easyslip.com/v2/info", {
+      headers: {
+        Authorization: `Bearer ${EASYSLIP_TOKEN}`
+      }
+    });
+    const data = await response.json();
+    return res.status(response.status).json(data);
+  } catch (err) {
+    return res.status(500).json({ success: false, error: String(err) });
+  }
 });
 app.get("/api/health", (_req, res) => {
   res.json({
@@ -31,6 +47,16 @@ app.post("/api/verify-slip", async (req, res) => {
         error: { message: "Image or payload is required" }
       });
     }
+    const slipContent = String(image || payload);
+    const slipHash = crypto.createHash("md5").update(slipContent.slice(0, 5e3) + slipContent.length).digest("hex");
+    if (slipVerificationCache.has(slipHash)) {
+      const cached = slipVerificationCache.get(slipHash);
+      return res.status(cached.status).json({
+        ...cached.data,
+        cached: true,
+        message: `${cached.data.message || ""} (\u0E14\u0E36\u0E07\u0E08\u0E32\u0E01\u0E1B\u0E23\u0E30\u0E27\u0E31\u0E15\u0E34\u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E1B\u0E23\u0E30\u0E2B\u0E22\u0E31\u0E14\u0E40\u0E04\u0E23\u0E14\u0E34\u0E15 EasySlip)`.trim()
+      });
+    }
     const response = await fetch("https://developer.easyslip.com/api/v1/verify", {
       method: "POST",
       headers: {
@@ -42,6 +68,13 @@ app.post("/api/verify-slip", async (req, res) => {
       })
     });
     const data = await response.json();
+    if (response.ok && data) {
+      slipVerificationCache.set(slipHash, {
+        status: response.status,
+        data,
+        cachedAt: Date.now()
+      });
+    }
     return res.status(response.status).json(data);
   } catch (error) {
     console.error("EasySlip server proxy error:", error);
@@ -51,16 +84,16 @@ app.post("/api/verify-slip", async (req, res) => {
     });
   }
 });
-const DATA_DIR = path.join(process.cwd(), "data");
-const ORDERS_FILE = path.join(DATA_DIR, "orders.json");
-const ORDERS_SAFE_BACKUP = path.join(DATA_DIR, "orders.safe_backup.json");
-const DELETED_ORDERS_FILE = path.join(DATA_DIR, "deleted_order_ids.json");
-const CUSTOMERS_FILE = path.join(DATA_DIR, "customers.json");
-const CUSTOMERS_SAFE_BACKUP = path.join(DATA_DIR, "customers.safe_backup.json");
-const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
-const GAMES_FILE = path.join(DATA_DIR, "games.json");
-const BACKUPS_DIR = path.join(DATA_DIR, "backups");
-const UPLOADS_DIR = path.join(process.cwd(), "public", "uploads");
+var DATA_DIR = path.join(process.cwd(), "data");
+var ORDERS_FILE = path.join(DATA_DIR, "orders.json");
+var ORDERS_SAFE_BACKUP = path.join(DATA_DIR, "orders.safe_backup.json");
+var DELETED_ORDERS_FILE = path.join(DATA_DIR, "deleted_order_ids.json");
+var CUSTOMERS_FILE = path.join(DATA_DIR, "customers.json");
+var CUSTOMERS_SAFE_BACKUP = path.join(DATA_DIR, "customers.safe_backup.json");
+var SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
+var GAMES_FILE = path.join(DATA_DIR, "games.json");
+var BACKUPS_DIR = path.join(DATA_DIR, "backups");
+var UPLOADS_DIR = path.join(process.cwd(), "public", "uploads");
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(BACKUPS_DIR)) fs.mkdirSync(BACKUPS_DIR, { recursive: true });
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -74,7 +107,7 @@ app.use("/public/uploads", express.static(UPLOADS_DIR, {
     res.setHeader("Cache-Control", "public, max-age=86400");
   }
 }));
-const sseClients = /* @__PURE__ */ new Set();
+var sseClients = /* @__PURE__ */ new Set();
 app.get("/api/data/events", (req, res) => {
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache, no-transform, no-store");
@@ -112,12 +145,12 @@ function broadcastEvent(type, data) {
     }
   }
 }
-let memoryOrders = [];
-let memoryCustomers = [];
-let memoryGames = null;
-let memorySettings = null;
-let memoryDeletedOrderIds = [];
-let lastSnapshotTime = 0;
+var memoryOrders = [];
+var memoryCustomers = [];
+var memoryGames = null;
+var memorySettings = null;
+var memoryDeletedOrderIds = [];
+var lastSnapshotTime = 0;
 function readJsonFile(filePath, defaultData = []) {
   try {
     if (!fs.existsSync(filePath)) {
@@ -439,8 +472,8 @@ app.get("/download-project.zip", (_req, res) => {
     res.status(404).send("File not found");
   }
 });
-const distPath = path.join(process.cwd(), "dist");
-const distHtml = path.join(distPath, "index.html");
+var distPath = path.join(process.cwd(), "dist");
+var distHtml = path.join(distPath, "index.html");
 async function startServer() {
   const isDev = process.env.NODE_ENV === "development" && !fs.existsSync(distHtml);
   if (isDev) {

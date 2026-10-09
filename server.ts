@@ -2,6 +2,7 @@ import "dotenv/config";
 import express, { Request, Response } from "express";
 import path from "path";
 import fs from "fs";
+import crypto from "crypto";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -21,6 +22,24 @@ app.use("/api", (_req: Request, res: Response, next) => {
   next();
 });
 
+// Cache for verified slips to protect user quota & credits from being burned twice
+const slipVerificationCache = new Map<string, { status: number; data: any; cachedAt: number }>();
+
+// EasySlip Live Info & Quota Endpoint
+app.get("/api/easyslip/info", async (_req: Request, res: Response) => {
+  try {
+    const response = await fetch("https://api.easyslip.com/v2/info", {
+      headers: {
+        Authorization: `Bearer ${EASYSLIP_TOKEN}`,
+      },
+    });
+    const data = await response.json();
+    return res.status(response.status).json(data);
+  } catch (err) {
+    return res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
 // Health Check Endpoint
 app.get("/api/health", (_req: Request, res: Response) => {
   res.json({
@@ -31,7 +50,7 @@ app.get("/api/health", (_req: Request, res: Response) => {
   });
 });
 
-// EasySlip Proxy Verification Endpoint
+// EasySlip Proxy Verification Endpoint with Anti-Waste Slip Cache
 app.post("/api/verify-slip", async (req: Request, res: Response) => {
   try {
     const { image, payload } = req.body;
@@ -39,6 +58,19 @@ app.post("/api/verify-slip", async (req: Request, res: Response) => {
       return res.status(400).json({
         success: false,
         error: { message: "Image or payload is required" },
+      });
+    }
+
+    const slipContent = String(image || payload);
+    const slipHash = crypto.createHash("md5").update(slipContent.slice(0, 5000) + slipContent.length).digest("hex");
+
+    // If already verified before, return cached result immediately to save credits
+    if (slipVerificationCache.has(slipHash)) {
+      const cached = slipVerificationCache.get(slipHash)!;
+      return res.status(cached.status).json({
+        ...cached.data,
+        cached: true,
+        message: `${cached.data.message || ''} (ดึงจากประวัติเพื่อประหยัดเครดิต EasySlip)`.trim(),
       });
     }
 
@@ -54,6 +86,13 @@ app.post("/api/verify-slip", async (req: Request, res: Response) => {
     });
 
     const data = await response.json();
+    if (response.ok && data) {
+      slipVerificationCache.set(slipHash, {
+        status: response.status,
+        data,
+        cachedAt: Date.now(),
+      });
+    }
     return res.status(response.status).json(data);
   } catch (error) {
     console.error("EasySlip server proxy error:", error);

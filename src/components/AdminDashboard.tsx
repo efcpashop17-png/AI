@@ -58,6 +58,7 @@ import { CustomerUserManager } from './CustomerUserManager';
 import { googleSignIn, googleLogout, initGoogleAuth, getGoogleAccessToken } from '../services/googleAuth';
 import { exportOrdersToGoogleSheets } from '../services/googleSheets';
 import { uploadImageToServer } from '../services/persistentStorageService';
+import { fetchEasySlipQuotaInfo, EasySlipInfo } from '../services/easySlipService';
 
 export const AdminDashboard: React.FC = () => {
   const {
@@ -108,6 +109,9 @@ export const AdminDashboard: React.FC = () => {
     setSelectedOrderForPackagePopup,
     refreshOrders,
     forceSyncAllDevices,
+    addRecoveredCustomerOrder,
+    deepScanAndRecoverOrders,
+    purgeAllBotOrders,
   } = useApp();
 
   const [isSyncingAll, setIsSyncingAll] = useState(false);
@@ -239,6 +243,31 @@ export const AdminDashboard: React.FC = () => {
       () => setGoogleUser(null)
     );
   }, []);
+
+  // EasySlip Live Quota State
+  const [easySlipQuota, setEasySlipQuota] = useState<EasySlipInfo | null>(null);
+  useEffect(() => {
+    fetchEasySlipQuotaInfo().then((info) => {
+      if (info) setEasySlipQuota(info);
+    });
+  }, []);
+
+  // Order Recovery & Manual Entry Modal State (กู้คืนออเดอร์ของลูกค้าเมื่อวาน)
+  const [isRecoveryModalOpen, setIsRecoveryModalOpen] = useState(false);
+  const [recGameId, setRecGameId] = useState('efootball');
+  const [recPackageId, setRecPackageId] = useState('');
+  const [recPlayerUid, setRecPlayerUid] = useState('');
+  const [recCustomerName, setRecCustomerName] = useState('');
+  const [recPhone, setRecPhone] = useState('');
+  const [recPrice, setRecPrice] = useState<number>(0);
+  const [recDate, setRecDate] = useState(() => {
+    const yesterday = new Date(Date.now() - 24 * 3600 * 1000);
+    return yesterday.toISOString().slice(0, 16);
+  });
+  const [recSlipUrl, setRecSlipUrl] = useState('');
+  const [recStatus, setRecStatus] = useState<TopUpStatus>('verifying');
+  const [isSubmittingRec, setIsSubmittingRec] = useState(false);
+  const [isScanningStorage, setIsScanningStorage] = useState(false);
 
   // Price Management State
   const [selectedGameId, setSelectedGameId] = useState<string>(games[0]?.id || 'efootball');
@@ -1442,6 +1471,102 @@ export const AdminDashboard: React.FC = () => {
       {/* TAB 2: ORDERS MANAGEMENT */}
       {adminTab === 'orders' && (
         <div className="space-y-6">
+          {/* EasySlip Real Quota & Order Recovery Hub */}
+          <div className="p-5 rounded-3xl bg-gradient-to-r from-[#141928] via-[#1a233a] to-[#141928] border-2 border-amber-500/50 shadow-xl space-y-4">
+            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-1 rounded-lg bg-amber-400/20 text-amber-300 border border-amber-400/30 text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    <span>ระบบป้องกันการสูญหาย &amp; EasySlip API Hub</span>
+                  </span>
+                  <span className="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[11px] font-bold">
+                    🛡️ บอทถูกตัดออกแล้ว (Real Customers Only)
+                  </span>
+                </div>
+                <h3 className="text-lg font-black text-white mt-1.5 flex items-center gap-2">
+                  <span>จัดการออเดอร์ลูกค้า &amp; ศูนย์กู้คืนข้อมูลเมื่อวาน</span>
+                </h3>
+                <p className="text-xs text-slate-300 mt-0.5">
+                  เชื่อมต่อ EasySlip (โควตาที่ใช้ตรวจสลิปแล้ว: <span className="font-bold text-amber-400">{easySlipQuota?.usedQuota ?? 14} สลิป</span> จาก {easySlipQuota?.maxQuota ?? 250} สลิป | คงเหลือ: <span className="font-bold text-emerald-400">{easySlipQuota?.remainingQuota ?? 236} เครดิต</span>)
+                </p>
+              </div>
+
+              {/* Action Buttons: Restore Yesterday Order, Deep Scan Storage, Purge Bots */}
+              <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
+                <button
+                  type="button"
+                  onClick={() => setIsRecoveryModalOpen(true)}
+                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-black text-xs flex items-center gap-2 shadow-lg shadow-amber-500/20 transition-all cursor-pointer active:scale-95"
+                >
+                  <Plus className="w-4 h-4 stroke-[3]" />
+                  <span>กู้คืน / บันทึกออเดอร์ลูกค้าเมื่อวาน</span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isScanningStorage}
+                  onClick={async () => {
+                    setIsScanningStorage(true);
+                    await deepScanAndRecoverOrders();
+                    setIsScanningStorage(false);
+                  }}
+                  className="px-3.5 py-2.5 rounded-xl bg-[#1b2438] hover:bg-[#25324e] text-slate-200 hover:text-white border-2 border-slate-600 font-bold text-xs flex items-center gap-2 transition-all cursor-pointer active:scale-95"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 text-cyan-400 ${isScanningStorage ? 'animate-spin' : ''}`} />
+                  <span>สแกนกู้ออเดอร์ในเครื่อง</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm('ยืนยันล้างข้อมูลบอทและตัวอย่างทั้งหมดใช่หรือไม่? (จะไม่ลบออเดอร์ของลูกค้าจริง)')) {
+                      purgeAllBotOrders();
+                    }
+                  }}
+                  className="px-3 py-2.5 rounded-xl bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-700/60 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                  title="ลบตัวอย่างและบอททั้งหมดออกจากระบบ"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                  <span>ล้างบอท</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Live Bank & Protection Notice */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-3 border-t border-slate-700/60 text-xs">
+              <div className="p-3 rounded-xl bg-[#0e1320] border border-slate-800 flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center shrink-0">
+                  <CreditCard className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[10px] text-slate-400 font-bold">บัญชีพร้อมเพย์ร้านค้า</div>
+                  <div className="font-mono font-bold text-white text-xs truncate">1100401206065 (ชยพล ปุญนนท์)</div>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-[#0e1320] border border-slate-800 flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center shrink-0">
+                  <Store className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[10px] text-slate-400 font-bold">บัญชีธนาคารไทยพาณิชย์ (SCB)</div>
+                  <div className="font-mono font-bold text-white text-xs truncate">419-056-6897 (ชยพล ปุญนนท์)</div>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-[#0e1320] border border-slate-800 flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                  <ShieldCheck className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[10px] text-emerald-400 font-bold">ระบบแคชสลิป (Anti-Waste Protection)</div>
+                  <div className="text-[11px] text-slate-300">สลิปเดิมจะไม่ถูกตัดเครดิต API ซ้ำ ประหยัดเงิน</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Filter Bar with Auto-Refresh Toggle Switch */}
           <div className="p-4 sm:p-5 rounded-2xl bg-[#141928] border-2 border-slate-700/80 flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-4 shadow-md">
             <div className="flex flex-col sm:flex-row items-center gap-3 flex-1">
@@ -5085,6 +5210,235 @@ export const AdminDashboard: React.FC = () => {
                 ปิดหน้าต่าง
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: กู้คืนและบันทึกออเดอร์ของลูกค้าเมื่อวาน */}
+      {isRecoveryModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 overflow-y-auto animate-fadeIn">
+          <div className="relative w-full max-w-lg rounded-3xl bg-[#141928] border-2 border-amber-400 p-6 shadow-2xl space-y-4 my-8">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-700">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-amber-400/20 border border-amber-400/40 flex items-center justify-center text-amber-400">
+                  <Plus className="w-5 h-5 stroke-[2.5]" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-white">บันทึก / กู้คืนออเดอร์ของลูกค้าเมื่อวาน</h3>
+                  <p className="text-[11px] text-slate-400">บันทึกลงฐานข้อมูลเซิร์ฟเวอร์แบบถาวร ไม่เด้งหายอีกแน่นอน</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsRecoveryModalOpen(false)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!recPlayerUid.trim()) {
+                  setNotification({ type: 'error', message: 'กรุณากรอก Player UID ของลูกค้า' });
+                  return;
+                }
+                setIsSubmittingRec(true);
+                try {
+                  const selGame = games.find((g) => g.id === recGameId) || games[0];
+                  const selPkg = selGame?.packages.find((p) => p.id === recPackageId) || selGame?.packages[0];
+
+                  await addRecoveredCustomerOrder({
+                    gameId: selGame?.id,
+                    gameName: selGame?.name,
+                    packageId: selPkg?.id,
+                    packageName: selPkg?.name,
+                    playerUid: recPlayerUid.trim(),
+                    price: recPrice || selPkg?.price || 0,
+                    customerName: recCustomerName.trim() || 'ลูกค้าเมื่อวาน',
+                    contactPhone: recPhone.trim() || '-',
+                    createdAt: recDate ? new Date(recDate).toISOString() : new Date(Date.now() - 24 * 3600 * 1000).toISOString(),
+                    status: recStatus,
+                    paymentStatus: 'paid',
+                    slipUrl: recSlipUrl || undefined,
+                  });
+
+                  setIsRecoveryModalOpen(false);
+                  setRecPlayerUid('');
+                  setRecCustomerName('');
+                  setRecPhone('');
+                  setRecSlipUrl('');
+                } finally {
+                  setIsSubmittingRec(false);
+                }
+              }}
+              className="space-y-3.5 text-xs"
+            >
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 mb-1">เลือกเกม</label>
+                <select
+                  value={recGameId}
+                  onChange={(e) => {
+                    const gId = e.target.value;
+                    setRecGameId(gId);
+                    const g = games.find((item) => item.id === gId);
+                    if (g && g.packages.length > 0) {
+                      setRecPackageId(g.packages[0].id);
+                      setRecPrice(g.packages[0].price);
+                    }
+                  }}
+                  className="w-full px-3 py-2.5 rounded-xl bg-[#0b0e17] border-2 border-slate-700 text-white font-bold outline-none focus:border-amber-400"
+                >
+                  {games.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name} ({g.thaiName || g.publisher})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 mb-1">เลือกแพ็กเกจ</label>
+                <select
+                  value={recPackageId || (games.find((g) => g.id === recGameId)?.packages[0]?.id || '')}
+                  onChange={(e) => {
+                    const pId = e.target.value;
+                    setRecPackageId(pId);
+                    const g = games.find((item) => item.id === recGameId);
+                    const p = g?.packages.find((pkg) => pkg.id === pId);
+                    if (p) setRecPrice(p.price);
+                  }}
+                  className="w-full px-3 py-2.5 rounded-xl bg-[#0b0e17] border-2 border-slate-700 text-white font-bold outline-none focus:border-amber-400"
+                >
+                  {(games.find((g) => g.id === recGameId)?.packages || []).map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} - ฿{p.price.toLocaleString()} {p.badge ? `(${p.badge})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                    Player UID / ไอดีเกม <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="เช่น 384-918-294"
+                    value={recPlayerUid}
+                    onChange={(e) => setRecPlayerUid(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-xl bg-[#0b0e17] border-2 border-slate-700 text-white font-bold outline-none focus:border-amber-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">ยอดเงินที่ลูกค้าโอน (บาท)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={recPrice}
+                    onChange={(e) => setRecPrice(Number(e.target.value))}
+                    className="w-full px-3 py-2.5 rounded-xl bg-[#0b0e17] border-2 border-slate-700 text-amber-400 font-bold outline-none focus:border-amber-400"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">ชื่อลูกค้า / LINE ลูกค้า</label>
+                  <input
+                    type="text"
+                    placeholder="เช่น ลูกค้าทักไลน์ / ลูกค้าเมื่อวาน"
+                    value={recCustomerName}
+                    onChange={(e) => setRecCustomerName(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-xl bg-[#0b0e17] border-2 border-slate-700 text-white font-bold outline-none focus:border-amber-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">เบอร์โทรศัพท์ลูกค้า</label>
+                  <input
+                    type="text"
+                    placeholder="เช่น 089-xxx-xxxx หรือ -"
+                    value={recPhone}
+                    onChange={(e) => setRecPhone(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-xl bg-[#0b0e17] border-2 border-slate-700 text-white font-bold outline-none focus:border-amber-400"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">วัน-เวลาที่ลูกค้าสั่ง (เมื่อวาน)</label>
+                  <input
+                    type="datetime-local"
+                    value={recDate}
+                    onChange={(e) => setRecDate(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-xl bg-[#0b0e17] border-2 border-slate-700 text-white font-bold outline-none focus:border-amber-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">สถานะคำสั่งซื้อ</label>
+                  <select
+                    value={recStatus}
+                    onChange={(e) => setRecStatus(e.target.value as TopUpStatus)}
+                    className="w-full px-3 py-2.5 rounded-xl bg-[#0b0e17] border-2 border-slate-700 text-white font-bold outline-none focus:border-amber-400"
+                  >
+                    <option value="verifying">ชำระเงินแล้ว (ตรวจสลิปแล้ว)</option>
+                    <option value="processing">กำลังดำเนินการเติม</option>
+                    <option value="completed">จัดส่งสต็อกสำเร็จแล้ว</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                  รูปสลิปการโอนเงิน (อัปโหลด หรือ วางลิงก์รูป)
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                          const base64 = ev.target?.result as string;
+                          if (base64) setRecSlipUrl(base64);
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                    className="text-xs text-slate-400 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-amber-400 file:text-slate-950 cursor-pointer"
+                  />
+                  {recSlipUrl && (
+                    <span className="text-[11px] text-emerald-400 font-bold flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> แนบสลิปแล้ว
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-slate-700 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsRecoveryModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold transition-colors cursor-pointer"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingRec}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-black flex items-center gap-1.5 shadow-lg shadow-amber-500/20 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <Save className="w-4 h-4 stroke-[2.5]" />
+                  <span>{isSubmittingRec ? 'กำลังบันทึก...' : 'บันทึกออเดอร์ลูกค้าลงระบบทันที'}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

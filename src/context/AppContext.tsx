@@ -196,6 +196,9 @@ interface AppContextType {
   restoreDatabaseBackup: (backupData: any) => Promise<{ success: boolean; orderCount: number; customerCount: number }>;
   refreshOrders: () => Promise<void>;
   forceSyncAllDevices: () => Promise<void>;
+  addRecoveredCustomerOrder: (orderData: Partial<TopUpOrder>) => Promise<TopUpOrder>;
+  deepScanAndRecoverOrders: () => Promise<number>;
+  purgeAllBotOrders: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -212,6 +215,22 @@ const LOCAL_STORAGE_ADMIN_AUTH = 'gamepay_admin_auth_v2';
 const LOCAL_STORAGE_CUSTOMER_USERS = 'efcpa_customer_users_v2';
 const LOCAL_STORAGE_CURRENT_CUSTOMER = 'efcpa_current_customer_v2';
 const LOCAL_STORAGE_PAYMENT_CONFIG = 'efcpa_payment_config_v2';
+
+// Bot mock order blacklist - ensure NO fake/bot orders ever pollute customer or admin tracking
+export const BOT_ORDER_IDS = new Set([
+  'GP-892460', 'GP-892458', 'GP-892456', 'GP-892455', 'GP-892454', 'GP-892453', 'GP-892452',
+  'GP-892451', 'GP-892450', 'GP-892449', 'GP-892448', 'GP-892447', 'GP-892446', 'GP-892445',
+  'GP-892444', 'GP-892443', 'GP-892442', 'GP-892440', 'GP-892435', 'GP-892430', 'GP-892425',
+  'GP-892422', 'GP-892420', 'GP-892418', 'GP-892415', 'GP-892410', 'GP-892409', 'GP-892405',
+  'GP-892385', 'GP-892380', 'GP-892398', 'GP-892375', 'GP-892370', 'GP-892365', 'GP-892360',
+  'GP-892340', 'GP-892350', 'GP-892330', 'GP-892320', 'GP-TEST-SYNC-1'
+]);
+
+export const isBotOrder = (order: any): boolean => {
+  if (!order || !order.id) return true;
+  if (BOT_ORDER_IDS.has(order.id)) return true;
+  return false;
+};
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // Track last local game edit to prevent background sync from overwriting newly edited prices/names
@@ -272,20 +291,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return [];
   });
 
-  // Load Orders with guaranteed seeding of all customer orders + localStorage merge + permanent vault recovery
+  // Load Orders with guaranteed persistence of real customer orders (Zero Bots)
   const [orders, setOrders] = useState<TopUpOrder[]>(() => {
     try {
       localStorage.removeItem(LOCAL_STORAGE_DELETED_ORDERS);
       const saved = localStorage.getItem(LOCAL_STORAGE_ORDERS);
       const vaultSaved = localStorage.getItem(LOCAL_STORAGE_VAULT);
       const orderMap = new Map<string, TopUpOrder>();
-      INITIAL_TOPUP_ORDERS.forEach((o) => orderMap.set(o.id, o));
+
       if (vaultSaved) {
         try {
           const parsedVault: TopUpOrder[] = JSON.parse(vaultSaved);
           if (Array.isArray(parsedVault)) {
             parsedVault.forEach((o) => {
-              if (o && o.id && o.id !== 'GP-TEST-SYNC-1') orderMap.set(o.id, o);
+              if (o && o.id && !isBotOrder(o)) orderMap.set(o.id, o);
             });
           }
         } catch (_) {}
@@ -295,7 +314,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           const parsed: TopUpOrder[] = JSON.parse(saved);
           if (Array.isArray(parsed)) {
             parsed.forEach((o) => {
-              if (o && o.id && o.id !== 'GP-TEST-SYNC-1') {
+              if (o && o.id && !isBotOrder(o)) {
                 const notation = formatOrderPackagesNotation(o);
                 const cleanOrder = notation && (o.packageName?.includes('และอีก') || o.gameName?.includes('และอื่นๆ'))
                   ? { ...o, packageName: notation, gameName: o.gameName.replace(/ และอื่นๆ.*$/, '') }
@@ -316,7 +335,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     } catch (e) {
       console.error('Failed to load orders from localStorage', e);
     }
-    return INITIAL_TOPUP_ORDERS;
+    return [];
   });
 
   // Load Dealers
@@ -440,14 +459,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (serverData.orders && Array.isArray(serverData.orders)) {
         setOrders((prev) => {
           const map = new Map<string, TopUpOrder>();
-          INITIAL_TOPUP_ORDERS.forEach((o) => map.set(o.id, o));
           serverData.orders.forEach((o) => {
-            if (o && o.id && o.id !== 'GP-TEST-SYNC-1') map.set(o.id, o);
+            if (o && o.id && !isBotOrder(o)) map.set(o.id, o);
           });
 
           // Preserve all existing customer orders so no order is ever lost
           prev.forEach((o) => {
-            if (o && o.id && o.id !== 'GP-TEST-SYNC-1' && !serverData.deletedOrderIds?.includes(o.id)) {
+            if (o && o.id && !isBotOrder(o) && !serverData.deletedOrderIds?.includes(o.id)) {
               if (!map.has(o.id)) {
                 map.set(o.id, o);
                 saveOrderToServer(o);
@@ -513,14 +531,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (Array.isArray(serverOrders)) {
           setOrders((prev) => {
             const map = new Map<string, TopUpOrder>();
-            INITIAL_TOPUP_ORDERS.forEach((o) => map.set(o.id, o));
             serverOrders.forEach((o) => {
-              if (o && o.id && o.id !== 'GP-TEST-SYNC-1') map.set(o.id, o);
+              if (o && o.id && !isBotOrder(o)) map.set(o.id, o);
             });
 
             // Keep all existing orders
             prev.forEach((o) => {
-              if (o && o.id && o.id !== 'GP-TEST-SYNC-1') {
+              if (o && o.id && !isBotOrder(o)) {
                 if (!map.has(o.id)) {
                   map.set(o.id, o);
                   saveOrderToServer(o);
@@ -650,15 +667,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
         setOrders((prev) => {
           const map = new Map<string, TopUpOrder>();
-          INITIAL_TOPUP_ORDERS.forEach((o) => map.set(o.id, o));
           // Server disk is source of truth
           serverOrders.forEach((o) => {
-            if (o && o.id && o.id !== 'GP-TEST-SYNC-1') map.set(o.id, o);
+            if (o && o.id && !isBotOrder(o)) map.set(o.id, o);
           });
 
           // Detect if any brand new orders arrived that were not in prev
           const prevIds = new Set(prev.map((o) => o.id));
-          const newIncomingOrders = serverOrders.filter((o) => !prevIds.has(o.id) && o.id !== 'GP-TEST-SYNC-1');
+          const newIncomingOrders = serverOrders.filter((o) => !prevIds.has(o.id) && !isBotOrder(o));
           if (newIncomingOrders.length > 0 && isAdminLoggedIn) {
             soundService.playNotificationSound();
             const first = newIncomingOrders[0];
@@ -670,7 +686,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
           // Keep all existing customer orders safe and never drop
           prev.forEach((o) => {
-            if (o && o.id && o.id !== 'GP-TEST-SYNC-1') {
+            if (o && o.id && !isBotOrder(o)) {
               if (!map.has(o.id)) {
                 map.set(o.id, o);
                 saveOrderToServer(o);
@@ -770,14 +786,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (serverData.orders && Array.isArray(serverData.orders)) {
           setOrders((prev) => {
             const map = new Map<string, TopUpOrder>();
-            INITIAL_TOPUP_ORDERS.forEach((o) => map.set(o.id, o));
             serverData.orders.forEach((o) => {
-              if (o && o.id && o.id !== 'GP-TEST-SYNC-1') map.set(o.id, o);
+              if (o && o.id && !isBotOrder(o)) map.set(o.id, o);
             });
 
             // Preserve all existing customer orders and auto-upload un-synced orders
             prev.forEach((o) => {
-              if (o && o.id && o.id !== 'GP-TEST-SYNC-1') {
+              if (o && o.id && !isBotOrder(o)) {
                 if (!map.has(o.id)) {
                   map.set(o.id, o);
                   saveOrderToServer(o);
@@ -2345,6 +2360,171 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
   };
 
+  // Add / Recover a customer order manually (for yesterday's orders or slip recovery)
+  const addRecoveredCustomerOrder = async (orderData: Partial<TopUpOrder>): Promise<TopUpOrder> => {
+    const orderId = orderData.id || `GP-${Math.floor(100000 + Math.random() * 900000)}`;
+    const now = new Date();
+    const orderDate = orderData.createdAt ? new Date(orderData.createdAt) : now;
+
+    const game = games.find((g) => g.id === orderData.gameId) || games[0];
+    const pkg = game?.packages.find((p) => p.id === orderData.packageId) || game?.packages[0];
+
+    const finalPrice = orderData.price !== undefined ? orderData.price : (pkg?.price || 0);
+
+    const newOrder: TopUpOrder = {
+      id: orderId,
+      gameId: orderData.gameId || game?.id || 'efootball',
+      gameName: orderData.gameName || game?.name || 'eFootball',
+      packageId: orderData.packageId || pkg?.id || 'manual-pkg',
+      packageName: orderData.packageName || pkg?.name || 'แพ็กเกจเติมสต็อก',
+      inGameItem: orderData.inGameItem || pkg?.inGameItem || 'Coins',
+      itemAmount: orderData.itemAmount || pkg?.amount || 1,
+      playerUid: (orderData.playerUid || '').trim(),
+      serverId: orderData.serverId,
+      zoneId: orderData.zoneId,
+      playerNamePreview: orderData.playerNamePreview || `Player_${(orderData.playerUid || '9999').slice(-4)}`,
+      quantity: orderData.quantity || 1,
+      price: finalPrice,
+      originalPrice: orderData.originalPrice || pkg?.originalPrice || finalPrice,
+      customerName: orderData.customerName || 'ลูกค้า (กู้คืนจากสลิป)',
+      contactPhone: orderData.contactPhone || '-',
+      contactEmail: orderData.contactEmail,
+      paymentMethod: orderData.paymentMethod || 'promptpay',
+      paymentStatus: (orderData.paymentStatus as any) || 'paid',
+      status: (orderData.status as any) || 'verifying',
+      slipUrl: orderData.slipUrl,
+      timeline: [
+        {
+          id: `step_${Date.now()}`,
+          status: 'verifying',
+          time: orderDate.toLocaleTimeString('th-TH'),
+          description: `กู้คืนและบันทึกออเดอร์ของลูกค้าสำเร็จ (ยอด ฿${finalPrice.toLocaleString()})`,
+        },
+      ],
+      createdAt: orderDate.toISOString(),
+      updatedAt: now.toISOString(),
+    };
+
+    setOrders((prev) => {
+      const filtered = prev.filter((o) => o.id !== newOrder.id && !isBotOrder(o));
+      const updated = [newOrder, ...filtered];
+      try {
+        localStorage.setItem(LOCAL_STORAGE_ORDERS, JSON.stringify(updated));
+        localStorage.setItem(LOCAL_STORAGE_VAULT, JSON.stringify(updated));
+      } catch (_) {}
+      return updated;
+    });
+
+    await saveOrderToServer(newOrder, 5);
+    pushOrderToGoogleSheets(newOrder).catch(() => null);
+    soundService.playSuccessSound();
+
+    setNotification({
+      type: 'success',
+      message: `บันทึกออเดอร์ลูกค้า ${newOrder.id} (${newOrder.gameName} - ฿${newOrder.price.toLocaleString()}) สำเร็จและซิงค์ถาวรแล้ว`,
+    });
+
+    return newOrder;
+  };
+
+  // Deep Scan browser local storage for any previously placed orders that were cached
+  const deepScanAndRecoverOrders = async (): Promise<number> => {
+    let recoveredCount = 0;
+    const candidates = new Map<string, TopUpOrder>();
+
+    const storageKeys = [
+      LOCAL_STORAGE_ORDERS,
+      LOCAL_STORAGE_VAULT,
+      'gamepay_orders_v1',
+      'efcpa_orders_v1',
+      'efcpa_orders_vault_permanent',
+      'efcpa_emergency_orders_backup_v1',
+    ];
+
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && (k.includes('order') || k.includes('Order')) && !storageKeys.includes(k)) {
+          storageKeys.push(k);
+        }
+      }
+    } catch (_) {}
+
+    for (const key of storageKeys) {
+      try {
+        const val = localStorage.getItem(key);
+        if (!val) continue;
+        const parsed = JSON.parse(val);
+        const list = Array.isArray(parsed) ? parsed : [parsed];
+        for (const item of list) {
+          if (item && item.id && !isBotOrder(item) && (item.playerUid || item.price)) {
+            candidates.set(item.id, item);
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (candidates.size > 0) {
+      setOrders((prev) => {
+        const map = new Map<string, TopUpOrder>();
+        prev.filter((o) => !isBotOrder(o)).forEach((o) => map.set(o.id, o));
+        candidates.forEach((cand, id) => {
+          if (!map.has(id)) {
+            map.set(id, cand);
+            saveOrderToServer(cand, 5);
+            recoveredCount++;
+          }
+        });
+        const updated = Array.from(map.values());
+        updated.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+        try {
+          localStorage.setItem(LOCAL_STORAGE_ORDERS, JSON.stringify(updated));
+          localStorage.setItem(LOCAL_STORAGE_VAULT, JSON.stringify(updated));
+        } catch (_) {}
+        return updated;
+      });
+    }
+
+    if (recoveredCount > 0) {
+      setNotification({
+        type: 'success',
+        message: `สแกนพบและกู้คืนออเดอร์ลูกค้าสำเร็จ ${recoveredCount} รายการ!`,
+      });
+    } else {
+      setNotification({
+        type: 'info',
+        message: 'ไม่พบออเดอร์ตกค้างในแคชของเบราว์เซอร์นี้ คุณสามารถกด "นำเข้า/บันทึกออเดอร์เมื่อวาน" เพื่อบันทึกจากสลิปได้ทันที',
+      });
+    }
+
+    return recoveredCount;
+  };
+
+  // Purge all bot mock orders completely from everywhere
+  const purgeAllBotOrders = async (): Promise<void> => {
+    setOrders((prev) => {
+      const clean = prev.filter((o) => !isBotOrder(o));
+      try {
+        localStorage.setItem(LOCAL_STORAGE_ORDERS, JSON.stringify(clean));
+        localStorage.setItem(LOCAL_STORAGE_VAULT, JSON.stringify(clean));
+      } catch (_) {}
+      return clean;
+    });
+
+    try {
+      await fetch('/api/data/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify([]),
+      });
+    } catch (_) {}
+
+    setNotification({
+      type: 'info',
+      message: 'ล้างข้อมูลบอททั้งหมดเรียบร้อยแล้ว ระบบสะอาดพร้อมใช้งานสำหรับลูกค้าจริง',
+    });
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -2427,6 +2607,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         restoreDatabaseBackup,
         refreshOrders,
         forceSyncAllDevices,
+        addRecoveredCustomerOrder,
+        deepScanAndRecoverOrders,
+        purgeAllBotOrders,
         soundEnabled,
         toggleSound,
       }}

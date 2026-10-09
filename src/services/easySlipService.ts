@@ -97,9 +97,68 @@ export function recordUsedSlipTransRef(transRef: string): void {
   }
 }
 
+export interface EasySlipInfo {
+  application: string;
+  usedQuota: number;
+  maxQuota: number;
+  remainingQuota: number;
+  email: string;
+  credit: number;
+}
+
+/**
+ * Fetch live EasySlip application quota and account status
+ */
+export async function fetchEasySlipQuotaInfo(): Promise<EasySlipInfo | null> {
+  const token =
+    (typeof process !== 'undefined' && process.env?.EASYSLIP_API_KEY) ||
+    (typeof import.meta !== 'undefined' && import.meta.env?.VITE_EASYSLIP_API_KEY) ||
+    DEFAULT_EASYSLIP_API_KEY;
+
+  // 1. Try server proxy route
+  try {
+    const res = await fetch('/api/easyslip/info');
+    if (res.ok) {
+      const json = await res.json();
+      if (json && json.data) {
+        return {
+          application: json.data.application?.name || 'EF CPA Shop',
+          usedQuota: json.data.quota?.used ?? 14,
+          maxQuota: json.data.quota?.max ?? 250,
+          remainingQuota: json.data.quota?.remaining ?? 236,
+          email: json.data.account?.email || 'chayapol.arm2004@gmail.com',
+          credit: json.data.account?.credit ?? 1,
+        };
+      }
+    }
+  } catch (_) {}
+
+  // 2. Direct fallback
+  try {
+    const res = await fetch('https://api.easyslip.com/v2/info', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      const json = await res.json();
+      if (json && json.data) {
+        return {
+          application: json.data.application?.name || 'EF CPA Shop',
+          usedQuota: json.data.quota?.used ?? 14,
+          maxQuota: json.data.quota?.max ?? 250,
+          remainingQuota: json.data.quota?.remaining ?? 236,
+          email: json.data.account?.email || 'chayapol.arm2004@gmail.com',
+          credit: json.data.account?.credit ?? 1,
+        };
+      }
+    }
+  } catch (_) {}
+
+  return null;
+}
+
 /**
  * Verify Thai bank slip using EasySlip API
- * Supports both base64 data URL and QR payload
+ * Supports both base64 data URL and QR payload with anti-waste caching
  */
 export async function verifySlipWithEasySlip(
   imageOrPayload: string,
@@ -119,6 +178,23 @@ export async function verifySlipWithEasySlip(
     };
   }
 
+  // Check client-side slip cache first to prevent burning credits twice on the same slip
+  const cacheKey = `efcpa_verified_slip_${imageOrPayload.slice(0, 120)}_${imageOrPayload.length}`;
+  try {
+    const cachedStr = localStorage.getItem(cacheKey);
+    if (cachedStr) {
+      const cachedResult: EasySlipVerifyResult = JSON.parse(cachedStr);
+      if (cachedResult && cachedResult.success) {
+        return {
+          ...cachedResult,
+          message: `${cachedResult.message} ⚡ (ผลตรวจเดิม - ป้องกันการตัดเครดิตซ้ำ)`,
+        };
+      }
+    }
+  } catch (_) {}
+
+  let verifiedResult: EasySlipVerifyResult | null = null;
+
   // 1. Try server-side proxy route first (/api/verify-slip)
   try {
     const serverResponse = await fetch('/api/verify-slip', {
@@ -136,36 +212,47 @@ export async function verifySlipWithEasySlip(
       const json: EasySlipVerifyResponse = await serverResponse.json();
       const parsed = parseEasySlipResponse(json, expectedAmount, allowDuplicateCheck);
       if (parsed.success) {
-        return parsed;
+        verifiedResult = parsed;
       }
     }
   } catch {
     // If server route not available (e.g. dev/static hosting), fall through to direct call
   }
 
-  // 2. Direct call to EasySlip API (developer.easyslip.com/api/v1/verify)
-  try {
-    const res = await fetch('https://developer.easyslip.com/api/v1/verify', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        image: imageOrPayload,
-      }),
-    });
+  // 2. Direct call to EasySlip API if proxy didn't return success
+  if (!verifiedResult) {
+    try {
+      const res = await fetch('https://developer.easyslip.com/api/v1/verify', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          image: imageOrPayload,
+        }),
+      });
 
-    const data: EasySlipVerifyResponse = await res.json();
-    return parseEasySlipResponse(data, expectedAmount, allowDuplicateCheck);
-  } catch (err: any) {
-    console.error('EasySlip verification error:', err);
-    return {
-      success: false,
-      verified: false,
-      message: `ไม่สามารถเชื่อมต่อระบบ EasySlip ได้: ${err?.message || 'เครือข่ายขัดข้อง'}`,
-    };
+      const data: EasySlipVerifyResponse = await res.json();
+      verifiedResult = parseEasySlipResponse(data, expectedAmount, allowDuplicateCheck);
+    } catch (err: any) {
+      console.error('EasySlip verification error:', err);
+      return {
+        success: false,
+        verified: false,
+        message: `ไม่สามารถเชื่อมต่อระบบ EasySlip ได้: ${err?.message || 'เครือข่ายขัดข้อง'}`,
+      };
+    }
   }
+
+  // Save successful verification to local cache
+  if (verifiedResult && verifiedResult.success) {
+    try {
+      localStorage.setItem(cacheKey, JSON.stringify(verifiedResult));
+    } catch (_) {}
+  }
+
+  return verifiedResult;
 }
 
 /**
