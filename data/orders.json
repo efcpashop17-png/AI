@@ -1,37 +1,5 @@
 [
   {
-    "id": "GP-892385",
-    "gameId": "valorant",
-    "gameName": "VALORANT (TH/SEA)",
-    "packageId": "val-pkg-2",
-    "packageName": "1,000 VP",
-    "inGameItem": "Valorant Points",
-    "itemAmount": 1000,
-    "playerUid": "ViperMain#TH1",
-    "playerNamePreview": "ViperMain",
-    "originalPrice": 300,
-    "price": 279,
-    "contactPhone": "095-443-2211",
-    "paymentMethod": "bank_transfer",
-    "paymentStatus": "paid",
-    "slipUrl": "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=400&q=80",
-    "status": "processing",
-    "timeline": [
-      {
-        "status": "pending_payment",
-        "time": "2026-10-01 07:55:00",
-        "description": "สร้างคำสั่งซื้อ และแนบสลิปธนาคาร"
-      },
-      {
-        "status": "processing",
-        "time": "2026-10-01 07:56:10",
-        "description": "แอดมินกำลังตรวจสอบสลิปและโอน VP เข้าบัญชี Riot"
-      }
-    ],
-    "createdAt": "2026-10-01T07:55:00Z",
-    "updatedAt": "2026-10-01T07:56:10Z"
-  },
-  {
     "id": "GP-892398",
     "gameId": "genshin",
     "gameName": "Genshin Impact",

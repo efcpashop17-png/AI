@@ -218,6 +218,7 @@ const LOCAL_STORAGE_CART = 'gamepay_cart_v2';
 const LOCAL_STORAGE_ADMIN_CRED = 'gamepay_admin_cred_v2';
 const LOCAL_STORAGE_ADMIN_AUTH = 'gamepay_admin_auth_v2';
 const LOCAL_STORAGE_CUSTOMER_USERS = 'efcpa_customer_users_v2';
+const LOCAL_STORAGE_DELETED_CUSTOMERS = 'efcpa_deleted_customers_v2';
 const LOCAL_STORAGE_CURRENT_CUSTOMER = 'efcpa_current_customer_v2';
 const LOCAL_STORAGE_PAYMENT_CONFIG = 'efcpa_payment_config_v2';
 const LOCAL_STORAGE_LOGO_URL = 'efcpa_shop_logo_url_v2';
@@ -291,7 +292,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const saved = localStorage.getItem(LOCAL_STORAGE_DELETED_ORDERS);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) return parsed.map((id) => String(id).trim().toLowerCase());
+      }
+    } catch (_) {}
+    return [];
+  });
+
+  // Track permanently deleted customer user IDs / usernames
+  const [deletedCustomerIds, setDeletedCustomerIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_DELETED_CUSTOMERS);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed.map((id) => String(id).trim().toLowerCase());
       }
     } catch (_) {}
     return [];
@@ -377,18 +390,38 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return [];
   });
 
-  // Load Customer Users (Admin-Created Only)
+  // Load Customer Users (Admin-Created Only - Never Resurrect Deleted)
   const [customerUsers, setCustomerUsers] = useState<CustomerUser[]>(() => {
     try {
+      const deletedList: string[] = JSON.parse(localStorage.getItem(LOCAL_STORAGE_DELETED_CUSTOMERS) || "[]") || [];
+      const deletedCustSet = new Set(deletedList.map((id) => String(id).trim().toLowerCase()));
+
       const saved = localStorage.getItem(LOCAL_STORAGE_CUSTOMER_USERS);
-      if (saved) {
+      if (saved !== null) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) {
+          return parsed.filter((u) => {
+            const cleanId = String(u?.id || "").trim().toLowerCase();
+            const cleanUser = String(u?.username || "").trim().toLowerCase();
+            return !deletedCustSet.has(cleanId) && !deletedCustSet.has(cleanUser);
+          });
+        }
+      } else {
+        // First run only: clean initial list
+        const cleanInitial = INITIAL_CUSTOMER_USERS.filter((u) => {
+          const cleanId = String(u?.id || "").trim().toLowerCase();
+          const cleanUser = String(u?.username || "").trim().toLowerCase();
+          return !deletedCustSet.has(cleanId) && !deletedCustSet.has(cleanUser);
+        });
+        try {
+          localStorage.setItem(LOCAL_STORAGE_CUSTOMER_USERS, JSON.stringify(cleanInitial));
+        } catch (_) {}
+        return cleanInitial;
       }
     } catch (e) {
-      console.error('Failed to load customerUsers', e);
+      console.error("Failed to load customerUsers", e);
     }
-    return INITIAL_CUSTOMER_USERS;
+    return [];
   });
 
   const [currentCustomerUser, setCurrentCustomerUser] = useState<CustomerUser | null>(() => {
@@ -1458,28 +1491,55 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }, 3600);
   };
 
-  // Delete Order (ลบออเดอร์ออกจากระบบและเซิร์ฟเวอร์ถาวร)
+  // Delete Order (ลบออเดอร์ออกจากระบบและเซิร์ฟเวอร์ถาวร 100% ห้ามเด้งกลับมา)
   const deleteOrder = async (orderId: string): Promise<boolean> => {
-    // 1. Immediately remove from local state and update localStorage
+    const rawId = String(orderId || "").trim();
+    const cleanId = rawId.toLowerCase();
+
+    // 1. Add to deletedOrderIds blacklist state and localStorage immediately
+    setDeletedOrderIds((prev) => {
+      const next = Array.from(new Set([...prev, cleanId, rawId]));
+      try {
+        localStorage.setItem(LOCAL_STORAGE_DELETED_ORDERS, JSON.stringify(next));
+      } catch (_) {}
+      return next;
+    });
+
+    // 2. Remove from local orders state and ALL storage vaults
     setOrders((prev) => {
-      const remaining = prev.filter((o) => o.id !== orderId);
+      const remaining = prev.filter((o) => {
+        const oId = String(o?.id || "").trim().toLowerCase();
+        return oId !== cleanId;
+      });
       try {
         localStorage.setItem(LOCAL_STORAGE_ORDERS, JSON.stringify(remaining));
+        localStorage.setItem(LOCAL_STORAGE_VAULT, JSON.stringify(remaining));
+        ["gamepay_orders_v1", "efcpa_orders_v1", "efcpa_orders_vault_permanent", "efcpa_emergency_orders_backup_v1"].forEach((k) => {
+          try {
+            const legacy = localStorage.getItem(k);
+            if (legacy) {
+              const parsed = JSON.parse(legacy);
+              if (Array.isArray(parsed)) {
+                localStorage.setItem(k, JSON.stringify(parsed.filter((o: any) => String(o?.id || "").trim().toLowerCase() !== cleanId)));
+              }
+            }
+          } catch (_) {}
+        });
       } catch (_) {}
       return remaining;
     });
 
-    // 2. Delete permanently on server disk
+    // 3. Delete permanently on server disk and clear from all backup snapshots
     try {
-      await deleteOrderFromServer(orderId);
+      await deleteOrderFromServer(rawId);
     } catch (e) {
-      console.warn('Failed to delete order on server:', e);
+      console.warn("Failed to delete order on server:", e);
     }
 
     soundService.playNotificationSound();
     setNotification({
-      type: 'info',
-      message: `ลบออเดอร์ ${orderId} ออกจากระบบเรียบร้อยแล้ว`,
+      type: "info",
+      message: `ลบออเดอร์ ${rawId} ออกจากระบบถาวรเรียบร้อยแล้ว`,
     });
     return true;
   };
@@ -1577,15 +1637,55 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
   };
 
+  // Delete Customer User (ลบยูสเซอร์ลูกค้าถาวร 100% ห้ามเด้งกลับมา)
   const deleteCustomerUser = (id: string) => {
-    deleteCustomerFromServer(id);
-    setCustomerUsers((prev) => prev.filter((u) => u.id !== id));
-    if (currentCustomerUser?.id === id) {
+    const rawId = String(id || "").trim();
+    const cleanId = rawId.toLowerCase();
+    const target = customerUsers.find(
+      (u) =>
+        String(u?.id || "").trim().toLowerCase() === cleanId ||
+        String(u?.username || "").trim().toLowerCase() === cleanId
+    );
+    const targetUsername = target?.username ? String(target.username).trim().toLowerCase() : "";
+
+    // 1. Blacklist ID and username locally so it can NEVER be resurrected
+    setDeletedCustomerIds((prev) => {
+      const next = Array.from(new Set([...prev, cleanId, rawId, targetUsername].filter(Boolean)));
+      try {
+        localStorage.setItem(LOCAL_STORAGE_DELETED_CUSTOMERS, JSON.stringify(next));
+      } catch (_) {}
+      return next;
+    });
+
+    // 2. Remove from local customerUsers state and save to localStorage
+    setCustomerUsers((prev) => {
+      const remaining = prev.filter((u) => {
+        const uId = String(u?.id || "").trim().toLowerCase();
+        const uUser = String(u?.username || "").trim().toLowerCase();
+        if (uId === cleanId || uUser === cleanId) return false;
+        if (targetUsername && (uId === targetUsername || uUser === targetUsername)) return false;
+        return true;
+      });
+      try {
+        localStorage.setItem(LOCAL_STORAGE_CUSTOMER_USERS, JSON.stringify(remaining));
+      } catch (_) {}
+      return remaining;
+    });
+
+    if (currentCustomerUser?.id === id || (targetUsername && currentCustomerUser?.username?.toLowerCase() === targetUsername)) {
       setCurrentCustomerUser(null);
+      try {
+        localStorage.removeItem(LOCAL_STORAGE_CURRENT_CUSTOMER);
+      } catch (_) {}
     }
+
+    // 3. Delete permanently on server disk
+    deleteCustomerFromServer(rawId);
+
+    soundService.playNotificationSound();
     setNotification({
-      type: 'success',
-      message: 'ลบยูสเซอร์ลูกค้าออกจากระบบแล้ว',
+      type: "success",
+      message: `ลบยูสเซอร์ลูกค้า "${target?.username || rawId}" ออกจากระบบถาวรแล้ว`,
     });
   };
 

@@ -5,6 +5,7 @@ export interface ServerDataResponse {
   orders: TopUpOrder[];
   deletedOrderIds?: string[];
   customers: CustomerUser[];
+  deletedCustomerIds?: string[];
   games?: Game[] | null;
   settings?: { paymentConfig?: PaymentConfig; logoUrl?: string } | null;
   timestamp?: number;
@@ -15,6 +16,7 @@ export async function fetchServerData(): Promise<{
   orders: TopUpOrder[];
   deletedOrderIds: string[];
   customers: CustomerUser[];
+  deletedCustomerIds?: string[];
   games?: Game[] | null;
   settings?: { paymentConfig?: PaymentConfig; logoUrl?: string } | null;
 } | null> {
@@ -337,9 +339,9 @@ export async function deleteCustomerFromServer(customerId: string): Promise<bool
 
 // Subscribe to Real-Time Server-Sent Events across all devices
 export function subscribeToLiveEvents(callbacks: {
-  onOrdersUpdated?: (orders: TopUpOrder[]) => void;
+  onOrdersUpdated?: (orders: TopUpOrder[], deletedOrderIds?: string[]) => void;
   onGamesUpdated?: (games: Game[]) => void;
-  onCustomersUpdated?: (customers: CustomerUser[]) => void;
+  onCustomersUpdated?: (customers: CustomerUser[], deletedCustomerIds?: string[]) => void;
   onSettingsUpdated?: (settings: any) => void;
 }): () => void {
   if (typeof window === 'undefined' || typeof EventSource === 'undefined') {
@@ -361,11 +363,11 @@ export function subscribeToLiveEvents(callbacks: {
           if (!payload || !payload.type) return;
 
           if (payload.type === 'orders_updated' && payload.data?.orders && callbacks.onOrdersUpdated) {
-            callbacks.onOrdersUpdated(payload.data.orders);
+            callbacks.onOrdersUpdated(payload.data.orders, payload.data.deletedOrderIds);
           } else if (payload.type === 'games_updated' && payload.data?.games && callbacks.onGamesUpdated) {
             callbacks.onGamesUpdated(payload.data.games);
           } else if (payload.type === 'customers_updated' && payload.data?.customers && callbacks.onCustomersUpdated) {
-            callbacks.onCustomersUpdated(payload.data.customers);
+            callbacks.onCustomersUpdated(payload.data.customers, payload.data.deletedCustomerIds);
           } else if (payload.type === 'settings_updated' && payload.data?.settings && callbacks.onSettingsUpdated) {
             callbacks.onSettingsUpdated(payload.data.settings);
           }

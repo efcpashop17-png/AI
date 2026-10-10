@@ -118,20 +118,5 @@
     "createdAt": "2026-10-02T13:00:00Z",
     "createdBy": "แอดมิน (สร้างมือ)",
     "lastLoginAt": "2026-10-08T06:45:00Z"
-  },
-  {
-    "id": "usr_009",
-    "username": "nooknick_gamer",
-    "password": "NickGamer#55",
-    "customerName": "นุ๊กนิ๊ก กิลด์เมอร์",
-    "contactPhone": "084-551-9922",
-    "contactEmail": "nooknick.gamer@gmail.com",
-    "role": "regular_customer",
-    "balance": 2900,
-    "status": "active",
-    "notes": "ชอบเปิดการ์ด Pokemon TCG และเล่น Zenless Zone Zero",
-    "createdAt": "2026-10-03T09:00:00Z",
-    "createdBy": "แอดมิน (สร้างมือ)",
-    "lastLoginAt": "2026-10-08T04:05:00Z"
   }
 ]

@@ -123,6 +123,7 @@ const ORDERS_SAFE_BACKUP = path.join(DATA_DIR, "orders.safe_backup.json");
 const DELETED_ORDERS_FILE = path.join(DATA_DIR, "deleted_order_ids.json");
 const CUSTOMERS_FILE = path.join(DATA_DIR, "customers.json");
 const CUSTOMERS_SAFE_BACKUP = path.join(DATA_DIR, "customers.safe_backup.json");
+const DELETED_CUSTOMERS_FILE = path.join(DATA_DIR, "deleted_customer_ids.json");
 const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
 const SETTINGS_SAFE_BACKUP = path.join(DATA_DIR, "settings.safe_backup.json");
 const GAMES_FILE = path.join(DATA_DIR, "games.json");
@@ -233,6 +234,7 @@ let memoryCustomers: any[] = [];
 let memoryGames: any[] | null = null;
 let memorySettings: any = null;
 let memoryDeletedOrderIds: string[] = [];
+let memoryDeletedCustomerIds: string[] = [];
 let lastSnapshotTime = 0;
 
 function readJsonFile(filePath: string, defaultData: any = []): any {
@@ -294,6 +296,7 @@ function createBackupSnapshotThrottled(prefix: string, data: any) {
 // Initialize memory state from disk safely
 function loadDatabaseState() {
   memoryDeletedOrderIds = readJsonFile(DELETED_ORDERS_FILE, []);
+  memoryDeletedCustomerIds = readJsonFile(DELETED_CUSTOMERS_FILE, []);
   if (!Array.isArray(memoryDeletedOrderIds)) {
     memoryDeletedOrderIds = [];
   }
@@ -414,7 +417,15 @@ app.get("/api/data/all", (_req: Request, res: Response) => {
     success: true,
     orders: cleanOrders,
     deletedOrderIds: memoryDeletedOrderIds,
-    customers: memoryCustomers,
+    customers: memoryCustomers.filter((c: any) => {
+      const cId = String(c?.id || "").trim().toLowerCase();
+      const cUser = String(c?.username || "").trim().toLowerCase();
+      return !memoryDeletedCustomerIds.some((d: any) => {
+        const dClean = String(d || "").trim().toLowerCase();
+        return dClean === cId || dClean === cUser;
+      });
+    }),
+    deletedCustomerIds: memoryDeletedCustomerIds,
     settings: memorySettings,
     games: memoryGames,
     timestamp: Date.now(),
@@ -702,10 +713,23 @@ app.post("/api/data/customers", (req: Request, res: Response) => {
   try {
     const incoming = req.body;
     const items = Array.isArray(incoming) ? incoming : (incoming.customer ? [incoming.customer] : [incoming]);
+    const deletedCustSet = new Set(memoryDeletedCustomerIds.map((d: any) => String(d || "").trim().toLowerCase()));
 
     for (const item of items) {
       if (!item || !item.id) continue;
-      const index = memoryCustomers.findIndex((c: any) => c.id === item.id || (c.username && c.username.toLowerCase() === item.username.toLowerCase()));
+      const itemIdClean = String(item.id || "").trim().toLowerCase();
+      const itemUserClean = String(item.username || "").trim().toLowerCase();
+
+      // Block any deleted customer from bouncing back
+      if (deletedCustSet.has(itemIdClean) || deletedCustSet.has(itemUserClean)) {
+        console.log(`[Blocked Resurrected Customer] ${item.username || item.id}`);
+        continue;
+      }
+
+      const index = memoryCustomers.findIndex((c: any) =>
+        String(c?.id || "").trim().toLowerCase() === itemIdClean ||
+        (c.username && String(c.username).trim().toLowerCase() === itemUserClean)
+      );
       if (index >= 0) {
         memoryCustomers[index] = { ...memoryCustomers[index], ...item };
       } else {
@@ -714,7 +738,7 @@ app.post("/api/data/customers", (req: Request, res: Response) => {
     }
     writeJsonFile(CUSTOMERS_FILE, memoryCustomers);
     createBackupSnapshotThrottled("customers_snapshot", memoryCustomers);
-    broadcastEvent("customers_updated", { customers: memoryCustomers });
+    broadcastEvent("customers_updated", { customers: memoryCustomers, deletedCustomerIds: memoryDeletedCustomerIds });
     res.json({ success: true, count: memoryCustomers.length });
   } catch (err) {
     res.status(500).json({ success: false, error: String(err) });
@@ -723,11 +747,59 @@ app.post("/api/data/customers", (req: Request, res: Response) => {
 
 app.delete("/api/data/customers/:id", (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
-    memoryCustomers = memoryCustomers.filter((c: any) => c.id !== id);
+    const rawId = String(req.params.id || "").trim();
+    const cleanId = rawId.toLowerCase();
+
+    // Find target customer to also blacklist username
+    const targetCustomer = memoryCustomers.find(
+      (c: any) =>
+        String(c?.id || "").trim().toLowerCase() === cleanId ||
+        String(c?.username || "").trim().toLowerCase() === cleanId
+    );
+    const targetUsername = targetCustomer?.username ? String(targetCustomer.username).trim().toLowerCase() : "";
+
+    memoryCustomers = memoryCustomers.filter((c: any) => {
+      const cId = String(c?.id || "").trim().toLowerCase();
+      const cUser = String(c?.username || "").trim().toLowerCase();
+      if (cId === cleanId || cUser === cleanId) return false;
+      if (targetUsername && (cId === targetUsername || cUser === targetUsername)) return false;
+      return true;
+    });
     writeJsonFile(CUSTOMERS_FILE, memoryCustomers);
-    broadcastEvent("customers_updated", { customers: memoryCustomers, deletedId: id });
-    res.json({ success: true, count: memoryCustomers.length });
+
+    // Also remove from CUSTOMERS_SAFE_BACKUP so it can never be auto-recovered!
+    if (fs.existsSync(CUSTOMERS_SAFE_BACKUP)) {
+      try {
+        let backupCust = JSON.parse(fs.readFileSync(CUSTOMERS_SAFE_BACKUP, "utf-8"));
+        if (Array.isArray(backupCust)) {
+          backupCust = backupCust.filter((c: any) => {
+            const cId = String(c?.id || "").trim().toLowerCase();
+            const cUser = String(c?.username || "").trim().toLowerCase();
+            if (cId === cleanId || cUser === cleanId) return false;
+            if (targetUsername && (cId === targetUsername || cUser === targetUsername)) return false;
+            return true;
+          });
+          writeJsonFile(CUSTOMERS_SAFE_BACKUP, backupCust);
+        }
+      } catch (_) {}
+    }
+
+    // Add to memoryDeletedCustomerIds blacklist
+    if (!memoryDeletedCustomerIds.some((d: any) => String(d || "").trim().toLowerCase() === cleanId)) {
+      memoryDeletedCustomerIds.push(rawId);
+    }
+    if (targetUsername && !memoryDeletedCustomerIds.some((d: any) => String(d || "").trim().toLowerCase() === targetUsername)) {
+      memoryDeletedCustomerIds.push(targetUsername);
+    }
+    writeJsonFile(DELETED_CUSTOMERS_FILE, memoryDeletedCustomerIds);
+
+    createBackupSnapshotThrottled("customers_snapshot", memoryCustomers);
+    broadcastEvent("customers_updated", {
+      customers: memoryCustomers,
+      deletedId: rawId,
+      deletedCustomerIds: memoryDeletedCustomerIds,
+    });
+    res.json({ success: true, count: memoryCustomers.length, deletedId: rawId });
   } catch (err) {
     res.status(500).json({ success: false, error: String(err) });
   }
