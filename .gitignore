@@ -1,0 +1,16 @@
+node_modules/
+build/
+coverage/
+.DS_Store
+*.log
+*.zip
+bun.lock
+bun.lockb
+.env*
+!.env.example
+
+# Temporary database backups and files
+data/backups/
+data/*.tmp*
+data/*.safe_backup.json
+*.tar.gz
