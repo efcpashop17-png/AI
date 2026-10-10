@@ -1,37 +1,6 @@
 /**
- * PromptPay EMVCo Payload Generator
+ * Thai PromptPay & SCB EMVCo QR Code Generator
  */
-export function generatePromptPayPayload(target: string, amount?: number): string {
-  const cleanTarget = target.replace(/[^0-9]/g, '');
-  let formattedTarget = cleanTarget;
-  let targetType = '01'; // 01 for mobile phone, 02 for national ID
-
-  if (cleanTarget.length === 10 && cleanTarget.startsWith('0')) {
-    // Mobile phone Thailand: replace leading 0 with 66
-    formattedTarget = '0066' + cleanTarget.substring(1);
-    targetType = '01';
-  } else if (cleanTarget.length === 13) {
-    // National ID
-    formattedTarget = cleanTarget;
-    targetType = '02';
-  }
-
-  const fTargetLen = ('00' + formattedTarget.length).slice(-2);
-  const subTag = `0016A000000677010111${targetType}${fTargetLen}${formattedTarget}`;
-  const tag29 = `29${('00' + subTag.length).slice(-2)}${subTag}`;
-
-  let payload = `000201010212${tag29}5802TH5303764`;
-
-  if (amount && amount > 0) {
-    const amtStr = amount.toFixed(2);
-    const amtLen = ('00' + amtStr.length).slice(-2);
-    payload += `54${amtLen}${amtStr}`;
-  }
-
-  payload += '6304';
-  const crc = crc16(payload);
-  return payload + crc;
-}
 
 function crc16(data: string): string {
   let crc = 0xffff;
@@ -42,3 +11,70 @@ function crc16(data: string): string {
   }
   return ('0000' + crc.toString(16).toUpperCase()).slice(-4);
 }
+
+function f(id: string, value: string): string {
+  const len = ('00' + value.length).slice(-2);
+  return id + len + value;
+}
+
+export function generatePromptPayPayload(
+  target: string, // phone number or national ID
+  amount?: number
+): string {
+  const cleanTarget = target.replace(/[^0-9]/g, '');
+  let tag29Value = '';
+
+  if (cleanTarget.length === 10 && cleanTarget.startsWith('0')) {
+    // Mobile Phone (e.g. 0948201166 -> 0066948201166)
+    const intlPhone = '0066' + cleanTarget.slice(1);
+    tag29Value = f('00', 'A000000677010111') + f('01', intlPhone);
+  } else if (cleanTarget.length === 13) {
+    // National ID
+    tag29Value = f('00', 'A000000677010111') + f('02', cleanTarget);
+  } else if (cleanTarget.length === 15) {
+    // e-Wallet ID
+    tag29Value = f('00', 'A000000677010111') + f('03', cleanTarget);
+  } else {
+    // Fallback standard mobile
+    const intl = cleanTarget.startsWith('0') ? '0066' + cleanTarget.slice(1) : cleanTarget;
+    tag29Value = f('00', 'A000000677010111') + f('01', intl);
+  }
+
+  let raw =
+    f('00', '01') + // Format
+    f('01', amount && amount > 0 ? '12' : '11') + // Static or Dynamic
+    f('29', tag29Value) + // Merchant Info PromptPay
+    f('53', '764') + // Currency code THB
+    f('58', 'TH'); // Country code
+
+  if (amount && amount > 0) {
+    raw += f('54', amount.toFixed(2));
+  }
+
+  raw += '6304';
+  const checksum = crc16(raw);
+  return raw + checksum;
+}
+
+export function formatPromptPayDisplay(target: string): string {
+  const clean = target.replace(/[^0-9]/g, '');
+  if (clean.length === 13) {
+    return `${clean.slice(0, 1)}-${clean.slice(1, 5)}-${clean.slice(5, 10)}-${clean.slice(10, 12)}-${clean.slice(12, 13)}`;
+  }
+  if (clean.length === 10) {
+    return `${clean.slice(0, 3)}-${clean.slice(3, 6)}-${clean.slice(6)}`;
+  }
+  return target;
+}
+
+export const PAYMENT_CONFIG = {
+  accountName: 'ชยพล ปุญนนท์',
+  bankName: 'ธนาคารไทยพาณิชย์ (SCB)',
+  bankCode: 'SCB',
+  bankAccount: '419-056-6897',
+  bankAccountRaw: '4190566897',
+  trueMoney: '094-820-1166',
+  trueMoneyRaw: '0948201166',
+  promptPayType: 'citizen_id' as 'citizen_id' | 'phone',
+  promptPayId: '1100401206065',
+};
