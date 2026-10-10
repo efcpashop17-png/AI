@@ -2,41 +2,139 @@
 
 @layer base {
   body {
-    font-family: 'Kanit', 'Prompt', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: 'IBM Plex Sans Thai', 'Prompt', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    font-weight: 400;
+    letter-spacing: -0.012em;
+    background-color: #0B0813;
+    color: #f1f5f9;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'IBM Plex Sans Thai', 'Prompt', 'Inter', sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    color: #ffffff;
+  }
+
+  .font-heading {
+    font-family: 'IBM Plex Sans Thai', 'Prompt', 'Inter', sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  .font-display {
+    font-family: 'IBM Plex Sans Thai', 'Prompt', 'Inter', sans-serif;
+    font-weight: 700;
+  }
+
+  .font-mono, .tabular-nums {
+    font-family: 'JetBrains Mono', monospace;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+  }
+
+  input, select, textarea {
+    font-family: 'IBM Plex Sans Thai', 'Prompt', system-ui, sans-serif;
   }
 }
 
-/* Custom modern scrollbar */
+/* Cyber-Gaming Glassmorphism & Neon Aura System */
+.cyber-card {
+  background: rgba(18, 14, 36, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.8), 0 0 15px rgba(139, 92, 246, 0.08);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.cyber-card:hover {
+  border-color: rgba(168, 85, 247, 0.6);
+  box-shadow: 0 15px 35px -5px rgba(0, 0, 0, 0.9), 0 0 25px rgba(168, 85, 247, 0.25);
+  transform: translateY(-2px);
+}
+
+.cyber-panel {
+  background: rgba(27, 20, 51, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(168, 85, 247, 0.25);
+  box-shadow: 0 12px 35px -5px rgba(0, 0, 0, 0.85);
+}
+
+.cyber-glass {
+  background: rgba(18, 14, 36, 0.65);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.neon-btn-purple {
+  background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 50%, #d946ef 100%);
+  color: #ffffff;
+  font-family: 'Chakra Petch', 'Prompt', sans-serif;
+  font-weight: 700;
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.4);
+  transition: all 0.2s ease-in-out;
+}
+
+.neon-btn-purple:hover {
+  background: linear-gradient(135deg, #7c3aed 0%, #9333ea 50%, #c026d3 100%);
+  box-shadow: 0 0 30px rgba(168, 85, 247, 0.65);
+  transform: translateY(-1px);
+}
+
+.neon-btn-cyan {
+  background: linear-gradient(135deg, #06b6d4 0%, #0ea5e9 100%);
+  color: #030712;
+  font-family: 'Chakra Petch', 'Prompt', sans-serif;
+  font-weight: 700;
+  box-shadow: 0 0 20px rgba(6, 182, 212, 0.4);
+  transition: all 0.2s ease-in-out;
+}
+
+.neon-btn-cyan:hover {
+  background: linear-gradient(135deg, #22d3ee 0%, #38bdf8 100%);
+  box-shadow: 0 0 30px rgba(6, 182, 212, 0.7);
+  transform: translateY(-1px);
+}
+
+.neon-badge-purple {
+  background: rgba(139, 92, 246, 0.15);
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  box-shadow: 0 0 10px rgba(168, 85, 247, 0.2);
+}
+
+.neon-badge-cyan {
+  background: rgba(6, 182, 212, 0.15);
+  color: #67e8f9;
+  border: 1px solid rgba(6, 182, 212, 0.4);
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.2);
+}
+
+.neon-badge-pink {
+  background: rgba(236, 72, 153, 0.15);
+  color: #f472b6;
+  border: 1px solid rgba(236, 72, 153, 0.4);
+  box-shadow: 0 0 10px rgba(236, 72, 153, 0.2);
+}
+
+/* Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
-
 ::-webkit-scrollbar-track {
-  background: #0a0a0a;
+  background: #0B0813;
 }
-
 ::-webkit-scrollbar-thumb {
-  background: #262626;
-  border-radius: 9999px;
+  background: #2b1f4c;
+  border-radius: 4px;
 }
-
 ::-webkit-scrollbar-thumb:hover {
-  background: #06b6d4;
-}
-
-/* Animations */
-@keyframes pulseGlow {
-  0%, 100% {
-    opacity: 0.6;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.9;
-    transform: scale(1.02);
-  }
-}
-
-.animate-pulse-glow {
-  animation: pulseGlow 3s ease-in-out infinite;
+  background: #8b5cf6;
 }

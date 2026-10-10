@@ -23,11 +23,10 @@ import {
 } from 'lucide-react';
 import { TopUpOrder, Game } from '../types';
 import { getOrderItems, formatPackageQuantityTag } from '../utils/orderHelper';
-import { formatSafeDate, formatSafeTime } from '../utils/dateHelper';
 
 interface AdminStockSummaryProps {
-  orders?: TopUpOrder[];
-  games?: Game[];
+  orders: TopUpOrder[];
+  games: Game[];
   onOpenOrderModal?: (order: TopUpOrder) => void;
 }
 
@@ -54,8 +53,8 @@ interface GameStockSummary {
 }
 
 export const AdminStockSummary: React.FC<AdminStockSummaryProps> = ({
-  orders = [],
-  games = [],
+  orders,
+  games,
   onOpenOrderModal,
 }) => {
   // Date filter mode: 'today' | 'yesterday' | 'custom' | 'all'
@@ -141,16 +140,16 @@ export const AdminStockSummary: React.FC<AdminStockSummaryProps> = ({
 
         const gameEntry = gameMap.get(rawGameId)!;
         gameEntry.orderIdsSet.add(order.id);
-        gameEntry.totalPieces += item.quantity || 1;
-        gameEntry.totalRevenue += item.totalPrice || 0;
+        gameEntry.totalPieces += item.quantity;
+        gameEntry.totalRevenue += item.totalPrice;
 
         // Key by package name & itemAmount
-        const pkgKey = `${item.packageId || item.packageName}_${item.itemAmount || 0}`;
+        const pkgKey = `${item.packageId || item.packageName}_${item.itemAmount}`;
         if (!gameEntry.packageMap.has(pkgKey)) {
           const notation = formatPackageQuantityTag(item);
           gameEntry.packageMap.set(pkgKey, {
             packageId: item.packageId || pkgKey,
-            packageName: item.packageName || `${item.itemAmount || 0} ${item.inGameItem || ''}`,
+            packageName: item.packageName || `${item.itemAmount} ${item.inGameItem}`,
             inGameItem: item.inGameItem || '',
             itemAmount: item.itemAmount || 0,
             quantity: 0,
@@ -163,14 +162,14 @@ export const AdminStockSummary: React.FC<AdminStockSummaryProps> = ({
         }
 
         const pkgEntry = gameEntry.packageMap.get(pkgKey)!;
-        pkgEntry.quantity += item.quantity || 1;
-        pkgEntry.totalPrice += item.totalPrice || 0;
+        pkgEntry.quantity += item.quantity;
+        pkgEntry.totalPrice += item.totalPrice;
         if (!pkgEntry.orderIds.includes(order.id)) {
           pkgEntry.ordersCount += 1;
           pkgEntry.orderIds.push(order.id);
         }
         // Update tag with new accumulated quantity
-        pkgEntry.tag = `${item.itemAmount ? (item.itemAmount || 0).toLocaleString() : item.packageName}x${pkgEntry.quantity}`;
+        pkgEntry.tag = `${item.itemAmount ? item.itemAmount.toLocaleString() : item.packageName}x${pkgEntry.quantity}`;
       });
     });
 
@@ -245,10 +244,10 @@ export const AdminStockSummary: React.FC<AdminStockSummaryProps> = ({
 
     summaryByGame.forEach((g, index) => {
       text += `${index + 1}. 🎮 ${g.gameName}\n`;
-      text += `   - รวมสั่ง: ${g.totalPieces} ชิ้น | ยอดเงิน: ฿${(g.totalRevenue || 0).toLocaleString()} (${g.totalOrders} ออเดอร์)\n`;
+      text += `   - รวมสั่ง: ${g.totalPieces} ชิ้น | ยอดเงิน: ฿${g.totalRevenue.toLocaleString()} (${g.totalOrders} ออเดอร์)\n`;
       text += `   - รายละเอียดแพ็กเกจ:\n`;
       g.packages.forEach((p) => {
-        text += `     • ${p.packageName}: สั่ง ${p.quantity} ชิ้น [${p.tag}] (฿${(p.totalPrice || 0).toLocaleString()})\n`;
+        text += `     • ${p.packageName}: สั่ง ${p.quantity} ชิ้น [${p.tag}] (฿${p.totalPrice.toLocaleString()})\n`;
       });
       text += `\n`;
     });
@@ -256,7 +255,7 @@ export const AdminStockSummary: React.FC<AdminStockSummaryProps> = ({
     text += `==============================\n`;
     text += `🔥 สรุปรวมสต็อกทั้งหมด: ${grandTotals.totalPieces} ชิ้น\n`;
     text += `📑 จำนวนออเดอร์: ${grandTotals.ordersCount} ออเดอร์\n`;
-    text += `💰 ยอดเงินรวม: ฿${(grandTotals.totalRevenue || 0).toLocaleString()} บาท\n`;
+    text += `💰 ยอดเงินรวม: ฿${grandTotals.totalRevenue.toLocaleString()} บาท\n`;
     text += `⚡ ตรวจสอบและจัดส่งโดยระบบ EF CPA Shop`;
 
     return text;
@@ -470,7 +469,7 @@ export const AdminStockSummary: React.FC<AdminStockSummaryProps> = ({
           <div>
             <span className="text-xs text-slate-400 font-bold block">ยอดเงินรวม</span>
             <span className="text-2xl sm:text-3xl font-black text-white font-mono mt-0.5 block">
-              ฿{(grandTotals.totalRevenue || 0).toLocaleString()}
+              ฿{grandTotals.totalRevenue.toLocaleString()}
             </span>
             <span className="text-[10px] text-slate-400 mt-1 block">ราคารวมของวันนี้</span>
           </div>
@@ -497,7 +496,7 @@ export const AdminStockSummary: React.FC<AdminStockSummaryProps> = ({
             const isCollapsed = expandedGames[gameSummary.gameId] === false;
 
             // Generate game-specific copy text
-            const gameText = `🎮 ${gameSummary.gameName} (รวม ${gameSummary.totalPieces} ชิ้น | ฿${(gameSummary.totalRevenue || 0).toLocaleString()})\n` +
+            const gameText = `🎮 ${gameSummary.gameName} (รวม ${gameSummary.totalPieces} ชิ้น | ฿${gameSummary.totalRevenue.toLocaleString()})\n` +
               gameSummary.packages
                 .map((p) => `  • ${p.packageName}: ${p.quantity} ชิ้น [${p.tag}]`)
                 .join('\n');
@@ -522,7 +521,7 @@ export const AdminStockSummary: React.FC<AdminStockSummaryProps> = ({
                         <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
                           รวม {gameSummary.totalPieces} ชิ้น
                         </span>
-                        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-800 text-slate-300 border border-slate-700">
+                        <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-800 text-slate-300 border border-slate-700">
                           {gameSummary.totalOrders} ออเดอร์
                         </span>
                       </div>
@@ -530,7 +529,7 @@ export const AdminStockSummary: React.FC<AdminStockSummaryProps> = ({
                       <div className="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
                         <span>ยอดขายเกมนี้:</span>
                         <strong className="text-amber-400 font-mono text-sm">
-                          ฿{(gameSummary.totalRevenue || 0).toLocaleString()} บาท
+                          ฿{gameSummary.totalRevenue.toLocaleString()} บาท
                         </strong>
                       </div>
                     </div>
@@ -619,7 +618,7 @@ export const AdminStockSummary: React.FC<AdminStockSummaryProps> = ({
                                     <span className="block text-sm font-black">{pkg.packageName}</span>
                                     {pkg.itemAmount > 0 && (
                                       <span className="text-[11px] text-slate-400 font-mono">
-                                        ได้รับ: {(pkg.itemAmount || 0).toLocaleString()} {pkg.inGameItem} / ชิ้น
+                                        ได้รับ: {pkg.itemAmount.toLocaleString()} {pkg.inGameItem} / ชิ้น
                                       </span>
                                     )}
                                   </div>
@@ -642,12 +641,12 @@ export const AdminStockSummary: React.FC<AdminStockSummaryProps> = ({
 
                               {/* Unit Price */}
                               <td className="py-3.5 px-4 text-right font-mono text-slate-300">
-                                ฿{(pkg.unitPrice || 0).toLocaleString()}
+                                ฿{pkg.unitPrice.toLocaleString()}
                               </td>
 
                               {/* Total Price */}
                               <td className="py-3.5 px-4 text-right font-mono font-black text-amber-400 text-sm">
-                                ฿{(pkg.totalPrice || 0).toLocaleString()}
+                                ฿{pkg.totalPrice.toLocaleString()}
                               </td>
 
                               {/* Orders count */}
@@ -697,7 +696,7 @@ export const AdminStockSummary: React.FC<AdminStockSummaryProps> = ({
                       รหัสย่อ: {selectedPkgForOrders.tag}
                     </span>
                     <span className="text-xs text-emerald-400 font-bold">
-                      สั่งรวม {selectedPkgForOrders.quantity} ชิ้น (฿{(selectedPkgForOrders.totalPrice || 0).toLocaleString()})
+                      สั่งรวม {selectedPkgForOrders.quantity} ชิ้น (฿{selectedPkgForOrders.totalPrice.toLocaleString()})
                     </span>
                   </div>
                 </div>
@@ -761,11 +760,11 @@ export const AdminStockSummary: React.FC<AdminStockSummaryProps> = ({
                       <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300 font-medium">
                         <span className="flex items-center gap-1">
                           <Calendar className="w-3.5 h-3.5 text-amber-400" />
-                          <span>วันที่: {formatSafeDate(ord.createdAt, { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+                          <span>วันที่: {new Date(ord.createdAt).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
                         </span>
                         <span className="flex items-center gap-1 text-cyan-300 font-mono font-bold">
                           <Clock className="w-3.5 h-3.5 text-cyan-400" />
-                          <span>เวลา {formatSafeTime(ord.createdAt, { hour: '2-digit', minute: '2-digit', second: '2-digit' })} น.</span>
+                          <span>เวลา {new Date(ord.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' })} น.</span>
                         </span>
                       </div>
 

@@ -96,7 +96,7 @@ export interface TopUpTimeline {
   status: TopUpStatus;
   time: string;
   description: string;
-  actor?: 'customer' | 'system' | 'admin' | 'easyslip';
+  actor?: 'customer' | 'system' | 'admin';
 }
 
 export interface TopUpOrder {
@@ -135,10 +135,8 @@ export interface TopUpOrder {
   deliveredBy?: string;           // ผู้จัดส่ง (เช่น "แอดมิน")
   timeline: TopUpTimeline[];
   createdAt: string;
-  updatedAt?: string;
+  updatedAt: string;
   dealerId?: string;
-  paidAt?: string;
-  completedAt?: string;
 }
 
 export interface Dealer {

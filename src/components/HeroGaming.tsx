@@ -73,6 +73,7 @@ export const HeroGaming: React.FC<HeroGamingProps> = ({
               FAST AUTO
             </span>
           </div>
+
           {/* Slogan & Title (User Specified Text) */}
           <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white leading-tight font-heading">
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 via-fuchsia-400 to-cyan-400 drop-shadow-[0_0_25px_rgba(168,85,247,0.4)]">

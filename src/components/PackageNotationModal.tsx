@@ -59,7 +59,7 @@ export const PackageNotationModal: React.FC = () => {
                 {order.id}
               </span>
               <span className="px-2.5 py-0.5 rounded-full bg-[#1b233a] border border-slate-700 text-cyan-300 font-extrabold text-xs">
-                {(order.gameName || 'เกม').replace(/ และอื่นๆ.*$/, '')}
+                {order.gameName.replace(/ และอื่นๆ.*$/, '')}
               </span>
               <span className="text-xs text-slate-400 font-semibold">
                 รวม {totalQuantity} แพ็ก
@@ -163,9 +163,9 @@ export const PackageNotationModal: React.FC = () => {
                         </span>
                       </div>
                       <span className="text-emerald-400 font-bold text-xs mt-0.5 block">
-                        ได้รับ: {(it.totalItemAmount || 0).toLocaleString()} {it.inGameItem}
+                        ได้รับ: {it.totalItemAmount.toLocaleString()} {it.inGameItem}
                         {it.totalBonusAmount && it.totalBonusAmount > 0
-                          ? ` (+โบนัส ${(it.totalBonusAmount || 0).toLocaleString()} ${it.inGameItem})`
+                          ? ` (+โบนัส ${it.totalBonusAmount.toLocaleString()} ${it.inGameItem})`
                           : ''}
                       </span>
                     </div>
@@ -173,7 +173,7 @@ export const PackageNotationModal: React.FC = () => {
 
                   <div className="text-left sm:text-right shrink-0">
                     <span className="font-mono font-black text-amber-400 text-sm block">
-                      ฿{(it.totalPrice || 0).toLocaleString()}
+                      ฿{it.totalPrice.toLocaleString()}
                     </span>
                     <span className="text-[11px] text-slate-400 font-mono">
                       จำนวน {it.quantity} ชิ้น
@@ -190,7 +190,7 @@ export const PackageNotationModal: React.FC = () => {
           <div className="text-xs">
             <span className="text-slate-400">ยอดรวมทั้งหมด: </span>
             <span className="font-mono font-black text-amber-400 text-base">
-              ฿{(order.price || 0).toLocaleString()}
+              ฿{order.price.toLocaleString()}
             </span>
           </div>
 

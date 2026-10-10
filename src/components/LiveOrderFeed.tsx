@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { TopUpOrder } from '../types';
-import { formatSafeDate, formatSafeTime } from '../utils/dateHelper';
 import {
   CheckCircle2,
   Clock,
@@ -142,7 +141,7 @@ export const LiveOrderFeed: React.FC = () => {
                   </td>
 
                   <td className="py-3.5 font-bold font-mono text-emerald-400">
-                    ฿{(ord.price || 0).toLocaleString()}
+                    ฿{ord.price.toLocaleString()}
                   </td>
 
                   <td className="py-3.5">
@@ -156,10 +155,10 @@ export const LiveOrderFeed: React.FC = () => {
 
                   <td className="py-3.5 text-xs text-slate-300 font-mono">
                     <div className="font-semibold text-slate-200">
-                      📅 {formatSafeDate(ord.createdAt, { day: 'numeric', month: 'short' })}
+                      📅 {new Date(ord.createdAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}
                     </div>
                     <div className="text-[11px] text-amber-300 font-bold">
-                      ⏰ {formatSafeTime(ord.createdAt, { hour: '2-digit', minute: '2-digit' })} น.
+                      ⏰ {new Date(ord.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} น.
                     </div>
                   </td>
 

@@ -19,7 +19,6 @@ import {
   Download,
 } from 'lucide-react';
 import { TopUpOrder } from '../types';
-import { formatSafeDateTime } from '../utils/dateHelper';
 
 export const DealerAnalyticsDashboard: React.FC = () => {
   const { orders, dealers } = useApp();
@@ -457,10 +456,9 @@ export const DealerAnalyticsDashboard: React.FC = () => {
               ) : (
                 customerBreakdown.map((cust, idx) => {
                   const topGame = Object.entries(cust.gameCounts).sort((a, b) => b[1] - a[1])[0];
-                  const lastDateFormatted = formatSafeDateTime(cust.lastOrderDate, {
+                  const lastDateFormatted = new Date(cust.lastOrderDate).toLocaleDateString('th-TH', {
                     day: 'numeric',
                     month: 'short',
-                  }, {
                     hour: '2-digit',
                     minute: '2-digit',
                   });

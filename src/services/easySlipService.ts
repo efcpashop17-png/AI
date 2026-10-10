@@ -112,7 +112,7 @@ export interface EasySlipInfo {
 export async function fetchEasySlipQuotaInfo(): Promise<EasySlipInfo | null> {
   const token =
     (typeof process !== 'undefined' && process.env?.EASYSLIP_API_KEY) ||
-    (typeof import.meta !== 'undefined' && import.meta.env?.VITE_EASYSLIP_API_KEY) ||
+    (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_EASYSLIP_API_KEY) ||
     DEFAULT_EASYSLIP_API_KEY;
 
   // 1. Try server proxy route
@@ -167,7 +167,7 @@ export async function verifySlipWithEasySlip(
 ): Promise<EasySlipVerifyResult> {
   const token =
     (typeof process !== 'undefined' && process.env?.EASYSLIP_API_KEY) ||
-    (typeof import.meta !== 'undefined' && import.meta.env?.VITE_EASYSLIP_API_KEY) ||
+    (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_EASYSLIP_API_KEY) ||
     DEFAULT_EASYSLIP_API_KEY;
 
   if (!imageOrPayload) {

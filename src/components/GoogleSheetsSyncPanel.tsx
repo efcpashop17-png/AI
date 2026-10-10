@@ -22,7 +22,6 @@ import {
   logout,
   getAccessToken,
 } from '../services/googleAuthService';
-import { formatSafeDateTime } from '../utils/dateHelper';
 import {
   getStoredSheetConfig,
   saveStoredSheetConfig,

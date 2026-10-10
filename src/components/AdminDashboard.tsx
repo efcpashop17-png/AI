@@ -43,7 +43,6 @@ import {
   ExternalLink,
   MessageSquare,
   Star,
-  Server,
   Camera,
   QrCode,
   CreditCard,
@@ -52,14 +51,12 @@ import {
 } from 'lucide-react';
 import { Game, GamePackage, TopUpStatus, TopUpOrder, Dealer, WebhookConfig, PaymentConfig } from '../types';
 import { getOrderItems, formatOrderPackagesNotation, formatPackageQuantityTag } from '../utils/orderHelper';
-import { formatSafeDate, formatSafeTime, formatSafeDateTime } from '../utils/dateHelper';
 import { formatPromptPayDisplay } from '../utils/promptpay';
 import { DealerAnalyticsDashboard } from './DealerAnalyticsDashboard';
 import { EFCPALogo } from './EFCPALogo';
 import { GoogleSheetsSyncPanel } from './GoogleSheetsSyncPanel';
 import { CustomerUserManager } from './CustomerUserManager';
 import { AdminStockSummary } from './AdminStockSummary';
-import { ErrorBoundary } from './ErrorBoundary';
 import { googleSignIn, googleLogout, initGoogleAuth, getGoogleAccessToken } from '../services/googleAuth';
 import { exportOrdersToGoogleSheets } from '../services/googleSheets';
 import { uploadImageToServer } from '../services/persistentStorageService';
@@ -69,7 +66,6 @@ export const AdminDashboard: React.FC = () => {
   const {
     games,
     orders,
-    deletedOrderIds,
     dealers,
     customerUsers,
     webhookConfig,
@@ -589,27 +585,20 @@ export const AdminDashboard: React.FC = () => {
   }
 
   // LOGGED IN AS ADMIN: FULL DASHBOARD
-  const currentGame = (games && games.find((g) => g.id === selectedGameId)) || (games && games[0]) || null;
-
-  const isOrderDeleted = (id?: string) => {
-    if (!id) return false;
-    const clean = id.trim().toLowerCase();
-    return deletedOrderIds.some((d) => d.trim().toLowerCase() === clean);
-  };
+  const currentGame = games.find((g) => g.id === selectedGameId) || games[0];
 
   // Stats
   const totalRevenue = orders
-    .filter((o) => !isOrderDeleted(o.id) && (o.status === 'completed' || o.paymentStatus === 'paid'))
-    .reduce((sum, o) => sum + (o.price || 0), 0);
+    .filter((o) => o.status === 'completed' || o.paymentStatus === 'paid')
+    .reduce((sum, o) => sum + o.price, 0);
 
-  const completedOrdersCount = orders.filter((o) => !isOrderDeleted(o.id) && o.status === 'completed').length;
-  const pendingOrdersCount = orders.filter((o) => !isOrderDeleted(o.id) && o.status !== 'completed' && o.status !== 'failed').length;
+  const completedOrdersCount = orders.filter((o) => o.status === 'completed').length;
+  const pendingOrdersCount = orders.filter((o) => o.status !== 'completed' && o.status !== 'failed').length;
 
   // Today's Orders & Pieces Summary Stats
   const todayOrders = useMemo(() => {
     const today = new Date();
     return orders.filter((o) => {
-      if (!o || !o.id || isOrderDeleted(o.id)) return false;
       const d = new Date(o.createdAt);
       return (
         !isNaN(d.getTime()) &&
@@ -618,7 +607,7 @@ export const AdminDashboard: React.FC = () => {
         d.getDate() === today.getDate()
       );
     });
-  }, [orders, deletedOrderIds]);
+  }, [orders]);
 
   const todayPiecesCount = useMemo(() => {
     return todayOrders.reduce((sum, o) => {
@@ -642,7 +631,6 @@ export const AdminDashboard: React.FC = () => {
 
   // Filtered orders with comprehensive search (ID, Game, UID, Phone, Customer Name, Username, Package)
   const filteredOrders = orders.filter((ord) => {
-    if (!ord || !ord.id || isOrderDeleted(ord.id)) return false;
     const q = orderSearch.trim().toLowerCase();
     const matchQuery =
       !q ||
@@ -775,7 +763,6 @@ export const AdminDashboard: React.FC = () => {
       });
       return;
     }
-    if (!currentGame) return;
 
     addPackageToGame(currentGame.id, {
       name: newPkgName || `${parsedAmount} ${newPkgInGameItem || currentGame.packages[0]?.inGameItem || 'เหรียญ'}`,
@@ -1486,11 +1473,9 @@ export const AdminDashboard: React.FC = () => {
                   </thead>
                   <tbody className="divide-y divide-slate-800">
                     {currentGame.packages.map((pkg) => {
-                      const origPr = pkg.originalPrice || 0;
-                      const curPr = pkg.price || 0;
                       const discount =
-                        origPr > curPr && origPr > 0
-                          ? Math.round(((origPr - curPr) / origPr) * 100)
+                        pkg.originalPrice > pkg.price
+                          ? Math.round(((pkg.originalPrice - pkg.price) / pkg.originalPrice) * 100)
                           : 0;
 
                       return (
@@ -1526,10 +1511,10 @@ export const AdminDashboard: React.FC = () => {
                             {pkg.inGameItem}
                           </td>
                           <td className="py-3.5 px-4 font-mono text-slate-400 line-through tabular-nums">
-                            ฿{(origPr).toLocaleString()}
+                            ฿{pkg.originalPrice.toLocaleString()}
                           </td>
                           <td className="py-3.5 px-4 font-mono font-black text-amber-400 text-base tabular-nums">
-                            ฿{(curPr).toLocaleString()}
+                            ฿{pkg.price.toLocaleString()}
                           </td>
                           <td className="py-3.5 px-4">
                             {discount > 0 ? (
@@ -1841,18 +1826,18 @@ export const AdminDashboard: React.FC = () => {
                           <div className="mt-1 space-y-0.5">
                             <span className="text-[11px] font-bold text-slate-200 flex items-center gap-1">
                               <span>📅</span>
-                              <span>{formatSafeDate(ord.createdAt, { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+                              <span>{new Date(ord.createdAt).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
                             </span>
                             <span className="text-[10px] text-amber-300 font-bold flex items-center gap-1">
                               <span>⏰</span>
-                              <span>เวลา {formatSafeTime(ord.createdAt, { hour: '2-digit', minute: '2-digit', second: '2-digit' })} น.</span>
+                              <span>เวลา {new Date(ord.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' })} น.</span>
                             </span>
                           </div>
                         </td>
                         <td className="py-3.5 px-4 min-w-[280px]">
                           <div className="flex items-center gap-2 mb-1.5">
                             <span className="font-black text-white text-xs bg-[#1b2234] px-2.5 py-0.5 rounded-lg border border-slate-700">
-                              {(ord.gameName || 'เกม').replace(/ และอื่นๆ.*$/, '')}
+                              {ord.gameName.replace(/ และอื่นๆ.*$/, '')}
                             </span>
                           </div>
 
@@ -1883,6 +1868,11 @@ export const AdminDashboard: React.FC = () => {
                                   {formatPackageQuantityTag(item)}
                                 </span>
                               ))}
+                            </div>
+
+                            {/* Notation text string */}
+                            <div className="font-mono font-bold text-amber-300 text-xs tracking-tight">
+                              {formatOrderPackagesNotation(ord)}
                             </div>
                           </div>
 
@@ -1940,7 +1930,7 @@ export const AdminDashboard: React.FC = () => {
                           )}
                         </td>
                         <td className="py-3.5 px-4 font-mono font-black text-amber-400 text-base tabular-nums">
-                          ฿{(ord.price || 0).toLocaleString()}
+                          ฿{ord.price.toLocaleString()}
                         </td>
                         <td className="py-3.5 px-4 text-xs font-bold text-slate-200">
                           <span className="capitalize">{ord.paymentMethod}</span>
@@ -2107,21 +2097,15 @@ export const AdminDashboard: React.FC = () => {
 
       {/* TAB: STOCK & PACKAGES BREAKDOWN SUMMARY */}
       {adminTab === 'summary' && (
-        <ErrorBoundary fallbackTitle="เกิดข้อผิดพลาดในการแสดงผลสรุปสต็อกสินค้า">
-          <AdminStockSummary
-            orders={orders}
-            games={games}
-            onOpenOrderModal={(ord) => setSelectedOrderForDetails(ord)}
-          />
-        </ErrorBoundary>
+        <AdminStockSummary
+          orders={orders}
+          games={games}
+          onOpenOrderModal={(ord) => setSelectedOrderForDetails(ord)}
+        />
       )}
 
       {/* TAB: CUSTOMER USER MANAGEMENT (ADMIN REGISTRATION ONLY) */}
-      {adminTab === 'users' && (
-        <ErrorBoundary fallbackTitle="เกิดข้อผิดพลาดในการโหลดระบบจัดการยูสเซอร์ลูกค้า">
-          <CustomerUserManager />
-        </ErrorBoundary>
-      )}
+      {adminTab === 'users' && <CustomerUserManager />}
 
       {/* TAB 3: GAMES MANAGEMENT */}
       {adminTab === 'games' && (
@@ -3004,9 +2988,7 @@ export const AdminDashboard: React.FC = () => {
       {adminTab === 'sheets' && (
         <div className="space-y-6 animate-fadeIn">
           {/* Real-time Order Sync & 24-Hour Scheduled Auto-Backup to Google Sheets */}
-          <ErrorBoundary fallbackTitle="เกิดข้อผิดพลาดในการโหลด Google Sheets Sync">
-            <GoogleSheetsSyncPanel />
-          </ErrorBoundary>
+          <GoogleSheetsSyncPanel />
 
           <div className="p-6 sm:p-8 rounded-3xl bg-[#141928] border-2 border-slate-700 shadow-xl">
             <div className="pb-4 border-b border-slate-800">
@@ -3098,45 +3080,6 @@ export const AdminDashboard: React.FC = () => {
                     <Upload className="w-4 h-4" />
                     <span>กู้คืนฐานข้อมูลจากไฟล์สำรอง (.JSON)</span>
                   </button>
-                </div>
-              </div>
-
-              {/* Hostinger & efcpashop.store Deployment Package */}
-              <div className="p-5 rounded-2xl bg-[#111726]/80 border border-violet-500/30 flex flex-col gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-violet-500/20 text-violet-400 flex items-center justify-center border border-violet-500/30">
-                    <Server className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-white text-base">ชุดไฟล์ติดตั้งและอัปเดต Hostinger (efcpashop.store)</h4>
-                    <p className="text-[11px] text-violet-300 font-medium">แก้ไขปัญหา 504 เกตเวย์หมดเวลา (Gateway Timeout) และอัปเดตระบบเวอร์ชันล่าสุด</p>
-                  </div>
-                </div>
-                <div className="text-xs text-slate-300 leading-relaxed bg-[#0c101d] p-3.5 rounded-xl border border-slate-800 space-y-1.5 font-sans">
-                  <p className="font-bold text-amber-300">💡 วิธีแก้ปัญหา 504 เกตเวย์หมดเวลา (504 Gateway Timeout / งินซ์):</p>
-                  <ol className="list-decimal pl-5 space-y-1 text-slate-300 text-[11px]">
-                    <li>เข้าสู่ระบบ <strong>Hostinger hPanel</strong> &gt; ไปที่เมนู <strong>Node.js</strong> ของโดเมน <code className="text-cyan-300">efcpashop.store</code></li>
-                    <li>กดปุ่ม <strong>Restart</strong> (เริ่มใหม่) หรือ Stop แล้ว Start เพื่อเคลียร์ Process ที่ค้าง</li>
-                    <li>หากต้องการอัปเดตโค้ดล่าสุดที่ป้องกัน 504 และรองรับ Socket ของ Hostinger: กดดาวน์โหลดไฟล์ ZIP ด้านล่าง แล้วนำไปแตกไฟล์ทับในโฟลเดอร์หลักผ่าน File Manager</li>
-                  </ol>
-                </div>
-                <div className="pt-1 flex flex-wrap items-center gap-3">
-                  <a
-                    href="/download-project.zip"
-                    download="efcpa-stock-app.zip"
-                    className="w-full sm:w-auto py-2.5 px-6 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-black text-xs transition-all shadow flex items-center justify-center gap-2 cursor-pointer shadow-violet-900/40"
-                  >
-                    <Download className="w-4 h-4" />
-                    <span>ดาวน์โหลดชุดไฟล์อัปเดต Hostinger (.ZIP)</span>
-                  </a>
-                  <a
-                    href="/download-project.tar.gz"
-                    download="efcpa-stock-app.tar.gz"
-                    className="w-full sm:w-auto py-2.5 px-6 rounded-xl bg-[#0b0e17] hover:bg-[#151c2e] text-slate-300 hover:text-white border border-slate-700 font-black text-xs transition-all shadow flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <Download className="w-4 h-4" />
-                    <span>ดาวน์โหลดแบบ (.tar.gz)</span>
-                  </a>
                 </div>
               </div>
             </div>
@@ -4252,19 +4195,31 @@ export const AdminDashboard: React.FC = () => {
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400 font-bold">ยอดเงิน:</span>
-                <span className="font-mono font-black text-emerald-400 text-sm">฿{(orderToDelete.price || 0).toLocaleString()}</span>
+                <span className="font-mono font-black text-emerald-400 text-sm">฿{orderToDelete.price.toLocaleString()}</span>
               </div>
             </div>
 
-            {/* Direct Confirmation - One-click delete without typing obstacle */}
-            <div className="p-4 rounded-2xl bg-rose-950/40 border border-rose-500/40 mb-5 space-y-2">
-              <div className="flex items-center gap-2 text-rose-300 font-bold text-xs">
-                <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
-                <span>ยืนยันการลบคำสั่งซื้อถาวร</span>
+            {/* Security Verification Input */}
+            <div className="space-y-2 mb-5">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-bold text-slate-300">
+                  พิมพ์คำว่า <span onClick={() => setDeleteConfirmText('DELETE')} className="font-mono font-black text-rose-400 uppercase select-all bg-rose-950/60 px-2 py-0.5 rounded border border-rose-500/40 cursor-pointer hover:bg-rose-900/80 transition-colors" title="คลิกเพื่อเติม DELETE">DELETE</span> เพื่อยืนยันการลบถาวร *
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setDeleteConfirmText('DELETE')}
+                  className="text-[11px] font-bold text-rose-400 hover:text-rose-300 underline cursor-pointer"
+                >
+                  เติม DELETE อัตโนมัติ
+                </button>
               </div>
-              <p className="text-[12px] text-slate-200">
-                เมื่อกดยืนยัน ออเดอร์นี้จะถูกลบออกจาก <strong className="text-rose-400">ระบบหลังบ้าน</strong> และ <strong className="text-amber-400">ประวัติคำสั่งซื้อของลูกค้า</strong> ทันที
-              </p>
+              <input
+                type="text"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder="พิมพ์ DELETE ที่นี่"
+                className="w-full px-4 py-2.5 rounded-xl bg-[#0b0e17] border-2 border-slate-700 focus:border-rose-500 text-white text-sm font-mono font-bold outline-none uppercase placeholder:normal-case"
+              />
             </div>
 
             <div className="flex gap-3">
@@ -4274,28 +4229,29 @@ export const AdminDashboard: React.FC = () => {
                   setOrderToDelete(null);
                   setDeleteConfirmText('');
                 }}
-                className="flex-1 py-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs cursor-pointer transition-colors"
+                className="flex-1 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs cursor-pointer transition-colors"
               >
                 ยกเลิก
               </button>
               <button
                 type="button"
-                disabled={isDeletingOrder}
+                disabled={deleteConfirmText.trim().toUpperCase() !== 'DELETE' || isDeletingOrder}
                 onClick={async () => {
-                  if (!orderToDelete) return;
+                  if (deleteConfirmText.trim().toUpperCase() !== 'DELETE') return;
                   setIsDeletingOrder(true);
-                  try {
-                    await deleteOrder(orderToDelete.id);
-                  } finally {
-                    setIsDeletingOrder(false);
-                    setOrderToDelete(null);
-                    setDeleteConfirmText('');
-                  }
+                  await deleteOrder(orderToDelete.id);
+                  setIsDeletingOrder(false);
+                  setOrderToDelete(null);
+                  setDeleteConfirmText('');
                 }}
-                className="flex-1 py-3.5 rounded-xl font-black text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg bg-rose-600 hover:bg-rose-500 text-white shadow-rose-900/40 hover:scale-[1.02] active:scale-95"
+                className={`flex-1 py-3 rounded-xl font-black text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-lg ${
+                  deleteConfirmText.trim().toUpperCase() === 'DELETE'
+                    ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-900/40'
+                    : 'bg-slate-800/60 text-slate-500 border border-slate-700 cursor-not-allowed opacity-50'
+                }`}
               >
                 <Trash2 className="w-4 h-4" />
-                <span>{isDeletingOrder ? 'กำลังลบออกจากระบบ...' : 'ยืนยันลบคำสั่งซื้อทันที'}</span>
+                <span>{isDeletingOrder ? 'กำลังลบ...' : 'ยืนยันลบถาวร'}</span>
               </button>
             </div>
           </div>
@@ -4431,7 +4387,7 @@ export const AdminDashboard: React.FC = () => {
               <div>
                 <span className="text-slate-400 font-bold block">ยอดเงิน:</span>
                 <span className="font-mono font-black text-amber-400 text-base">
-                  ฿{(activeProgressOrder.price || 0).toLocaleString()}
+                  ฿{activeProgressOrder.price.toLocaleString()}
                 </span>
               </div>
               <div>
@@ -4574,7 +4530,7 @@ export const AdminDashboard: React.FC = () => {
                     </div>
                     <div>
                       <p className="text-xs font-black text-white">
-                        สลิปยอด ฿{(activeProgressOrder.price || 0).toLocaleString()}
+                        สลิปยอด ฿{activeProgressOrder.price.toLocaleString()}
                       </p>
                       <p className="text-[11px] text-emerald-300 font-semibold">
                         ✅ ระบบปรับสถานะเป็น &quot;ชำระเงินแล้ว&quot; เมื่อมีสลิป
@@ -5262,14 +5218,14 @@ export const AdminDashboard: React.FC = () => {
                     <Calendar className="w-3.5 h-3.5 text-amber-400" />
                     <span>วันที่สั่งซื้อ:</span>
                     <strong className="text-amber-300">
-                      {formatSafeDate(selectedOrderForDetails.createdAt, { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}
+                      {new Date(selectedOrderForDetails.createdAt).toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}
                     </strong>
                   </span>
                   <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5 bg-[#0b0e17] px-2.5 py-1 rounded-lg border border-slate-700">
                     <Clock className="w-3.5 h-3.5 text-cyan-400" />
                     <span>เวลาสั่งซื้อ:</span>
                     <strong className="text-cyan-300 font-mono">
-                      {formatSafeTime(selectedOrderForDetails.createdAt, { hour: '2-digit', minute: '2-digit', second: '2-digit' })} น.
+                      {new Date(selectedOrderForDetails.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' })} น.
                     </strong>
                   </span>
                 </div>
@@ -5301,7 +5257,7 @@ export const AdminDashboard: React.FC = () => {
               <div>
                 <span className="text-slate-400 font-bold block">ยอดชำระสุทธิ:</span>
                 <span className="font-mono font-black text-amber-400 text-base">
-                  ฿{(selectedOrderForDetails.price || 0).toLocaleString()}
+                  ฿{selectedOrderForDetails.price.toLocaleString()}
                 </span>
               </div>
 
@@ -5458,16 +5414,16 @@ export const AdminDashboard: React.FC = () => {
                           </span>
                         </div>
                         <p className="text-xs text-emerald-400 font-bold mt-1">
-                          สิ่งที่ต้องส่งมอบในเกม: <span className="font-mono text-sm">{(item.totalItemAmount || 0).toLocaleString()} {item.inGameItem}</span>
+                          สิ่งที่ต้องส่งมอบในเกม: <span className="font-mono text-sm">{item.totalItemAmount.toLocaleString()} {item.inGameItem}</span>
                           {item.quantity > 1 && (
                             <span className="text-slate-400 font-normal ml-1">
-                              (ชิ้นละ {(item.itemAmount || 0).toLocaleString()} {item.inGameItem})
+                              (ชิ้นละ {item.itemAmount.toLocaleString()} {item.inGameItem})
                             </span>
                           )}
                         </p>
                         {item.totalBonusAmount && item.totalBonusAmount > 0 ? (
                           <p className="text-[11px] text-fuchsia-400 font-semibold">
-                            + โบนัสเพิ่มเติม: {(item.totalBonusAmount || 0).toLocaleString()} {item.inGameItem}
+                            + โบนัสเพิ่มเติม: {item.totalBonusAmount.toLocaleString()} {item.inGameItem}
                           </p>
                         ) : null}
                       </div>
@@ -5476,11 +5432,11 @@ export const AdminDashboard: React.FC = () => {
                     <div className="text-left sm:text-right border-t sm:border-t-0 border-slate-800 pt-2 sm:pt-0">
                       <span className="text-[11px] text-slate-400 font-bold block">ราคารวมรายการนี้</span>
                       <span className="font-mono text-base font-black text-amber-400">
-                        ฿{(item.totalPrice || 0).toLocaleString()}
+                        ฿{item.totalPrice.toLocaleString()}
                       </span>
                       {item.quantity > 1 && (
                         <span className="text-[10px] text-slate-400 block font-mono">
-                          (ชิ้นละ ฿{(item.unitPrice || 0).toLocaleString()})
+                          (ชิ้นละ ฿{item.unitPrice.toLocaleString()})
                         </span>
                       )}
                     </div>
@@ -5724,7 +5680,7 @@ export const AdminDashboard: React.FC = () => {
                 >
                   {(games.find((g) => g.id === recGameId)?.packages || []).map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.name} - ฿{(p.price || 0).toLocaleString()} {p.badge ? `(${p.badge})` : ''}
+                      {p.name} - ฿{p.price.toLocaleString()} {p.badge ? `(${p.badge})` : ''}
                     </option>
                   ))}
                 </select>

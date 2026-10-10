@@ -337,7 +337,7 @@ export async function deleteCustomerFromServer(customerId: string): Promise<bool
 
 // Subscribe to Real-Time Server-Sent Events across all devices
 export function subscribeToLiveEvents(callbacks: {
-  onOrdersUpdated?: (orders: TopUpOrder[], deletedId?: string, deletedOrderIds?: string[]) => void;
+  onOrdersUpdated?: (orders: TopUpOrder[]) => void;
   onGamesUpdated?: (games: Game[]) => void;
   onCustomersUpdated?: (customers: CustomerUser[]) => void;
   onSettingsUpdated?: (settings: any) => void;
@@ -349,40 +349,19 @@ export function subscribeToLiveEvents(callbacks: {
   let eventSource: EventSource | null = null;
   let isClosed = false;
   let reconnectTimer: any = null;
-  let retryCount = 0;
 
   const connect = () => {
     if (isClosed) return;
     try {
-      if (eventSource) {
-        eventSource.close();
-        eventSource = null;
-      }
       eventSource = new EventSource('/api/data/events');
-
-      eventSource.onopen = () => {
-        retryCount = 0;
-      };
 
       eventSource.onmessage = (event) => {
         try {
           const payload = JSON.parse(event.data);
           if (!payload || !payload.type) return;
 
-          if (payload.type === 'reconnect') {
-            if (eventSource) {
-              eventSource.close();
-              eventSource = null;
-            }
-            if (!isClosed) {
-              clearTimeout(reconnectTimer);
-              reconnectTimer = setTimeout(connect, 1500);
-            }
-            return;
-          }
-
           if (payload.type === 'orders_updated' && payload.data?.orders && callbacks.onOrdersUpdated) {
-            callbacks.onOrdersUpdated(payload.data.orders, payload.data.deletedId, payload.data.deletedOrderIds);
+            callbacks.onOrdersUpdated(payload.data.orders);
           } else if (payload.type === 'games_updated' && payload.data?.games && callbacks.onGamesUpdated) {
             callbacks.onGamesUpdated(payload.data.games);
           } else if (payload.type === 'customers_updated' && payload.data?.customers && callbacks.onCustomersUpdated) {
@@ -400,14 +379,13 @@ export function subscribeToLiveEvents(callbacks: {
         }
         if (!isClosed) {
           clearTimeout(reconnectTimer);
-          const delay = Math.min(30000, 3000 * Math.pow(1.5, Math.min(retryCount++, 5)));
-          reconnectTimer = setTimeout(connect, delay);
+          reconnectTimer = setTimeout(connect, 3000);
         }
       };
     } catch (_) {
       if (!isClosed) {
         clearTimeout(reconnectTimer);
-        reconnectTimer = setTimeout(connect, 5000);
+        reconnectTimer = setTimeout(connect, 3000);
       }
     }
   };

@@ -1,153 +1,291 @@
 import React, { useState } from 'react';
-import { X, Trash2, Plus, Minus, ShoppingBag, ArrowRight } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import {
+  X,
+  Trash2,
+  Plus,
+  Minus,
+  ShoppingBag,
+  Zap,
+  Gamepad2,
+  QrCode,
+  CreditCard,
+  Building,
+} from 'lucide-react';
+import { PaymentMethod } from '../types';
 
 export const CartDrawer: React.FC = () => {
-  const { cart, isCartOpen, setIsCartOpen, updateCartItemQuantity, removeFromCart, clearCart, createCartOrder } =
-    useApp();
-  const [contact, setContact] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const {
+    cart,
+    isCartOpen,
+    setIsCartOpen,
+    updateCartQuantity,
+    removeFromCart,
+    clearCart,
+    checkoutCart,
+    setActiveTab,
+    setNotification,
+  } = useApp();
+
+  const [contactPhone, setContactPhone] = useState('089-888-7766');
+  const [contactEmail, setContactEmail] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('promptpay');
 
   if (!isCartOpen) return null;
 
-  const totalPrice = cart.reduce((sum, item) => sum + item.pkg.price * item.quantity, 0);
   const totalQuantity = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const totalPrice = cart.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+  const totalOriginalPrice = cart.reduce(
+    (sum, item) => sum + item.originalPrice * item.quantity,
+    0
+  );
+  const totalSavings = totalOriginalPrice > totalPrice ? totalOriginalPrice - totalPrice : 0;
 
-  const handleCheckout = async () => {
+  const handleCheckout = (e: React.FormEvent) => {
+    e.preventDefault();
     if (cart.length === 0) return;
-    setIsSubmitting(true);
-    try {
-      await createCartOrder({ contact: contact.trim() });
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsSubmitting(false);
+
+    if (!contactPhone.trim()) {
+      setNotification({
+        type: 'error',
+        message: 'กรุณากรอกเบอร์โทรศัพท์สำหรับรับการแจ้งเตือน',
+      });
+      return;
     }
+
+    checkoutCart({
+      contactPhone: contactPhone.trim(),
+      contactEmail: contactEmail.trim() || undefined,
+      paymentMethod,
+    });
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden animate-in fade-in duration-200">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setIsCartOpen(false)} />
+    <div className="fixed inset-0 z-50 overflow-hidden animate-fadeIn">
+      {/* Backdrop */}
+      <div
+        onClick={() => setIsCartOpen(false)}
+        className="absolute inset-0 bg-[#0B0813]/85 backdrop-blur-md transition-opacity"
+      ></div>
 
-      <div className="absolute inset-y-0 right-0 max-w-full flex pl-10">
-        <div className="w-screen max-w-md bg-neutral-900 border-l border-neutral-800 shadow-2xl flex flex-col justify-between">
+      <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
+        <div className="w-screen max-w-md bg-[#0B0813]/95 backdrop-blur-2xl border-l border-violet-500/30 shadow-[0_0_50px_rgba(0,0,0,0.9)] flex flex-col text-white">
           {/* Header */}
-          <div className="p-5 border-b border-neutral-800 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <ShoppingBag className="w-5 h-5 text-cyan-400" />
-              <h2 className="text-lg font-bold text-white">ตะกร้าสั่งซื้อ ({totalQuantity} แพ็ก)</h2>
+          <div className="p-5 sm:p-6 border-b border-violet-500/25 flex items-center justify-between bg-[#120E24]">
+            <div className="flex items-center gap-3.5">
+              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white flex items-center justify-center font-bold shadow-[0_0_15px_rgba(168,85,247,0.5)] border border-violet-400/40">
+                <ShoppingBag className="w-6 h-6 stroke-[2.5]" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-xl text-white font-heading">
+                  ตะกร้าสินค้าของคุณ
+                </h3>
+                <span className="text-xs text-cyan-300 font-bold">
+                  {cart.length === 0
+                    ? 'ไม่มีรายการสินค้า'
+                    : `มี ${cart.length} แพ็กเกจ (รวม ${totalQuantity} รายการ)`}
+                </span>
+              </div>
             </div>
+
             <button
               onClick={() => setIsCartOpen(false)}
-              className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition"
+              className="p-2 rounded-xl text-violet-300 hover:text-white hover:bg-violet-950/60 transition-colors cursor-pointer"
             >
-              <X className="w-5 h-5" />
+              <X className="w-6 h-6 stroke-[2.5]" />
             </button>
           </div>
 
-          {/* Items List */}
-          <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          {/* Cart Items List */}
+          <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4">
             {cart.length === 0 ? (
-              <div className="text-center py-16 space-y-3">
-                <ShoppingBag className="w-12 h-12 text-neutral-600 mx-auto" />
-                <p className="text-neutral-400 text-sm">ยังไม่มีสินค้าในตะกร้า</p>
+              <div className="py-20 text-center space-y-4">
+                <div className="w-20 h-20 rounded-3xl bg-[#120E24] border border-violet-500/30 flex items-center justify-center mx-auto text-violet-400/60 shadow-[0_0_20px_rgba(139,92,246,0.15)]">
+                  <Gamepad2 className="w-10 h-10" />
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-white text-lg font-heading">ตะกร้าของคุณยังว่างอยู่</h4>
+                  <p className="text-xs text-violet-300/70 font-medium mt-1">
+                    เลือกสินค้าที่ต้องการ แล้วกด &quot;เพิ่มลงในตะกร้า&quot; ได้ตามต้องการ
+                  </p>
+                </div>
                 <button
-                  onClick={() => setIsCartOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-neutral-800 text-cyan-400 text-xs font-semibold hover:bg-neutral-750 transition"
+                  onClick={() => {
+                    setIsCartOpen(false);
+                    setActiveTab('store');
+                  }}
+                  className="neon-btn-purple px-6 py-3 rounded-2xl text-sm font-bold inline-flex items-center gap-2 cursor-pointer shadow-[0_0_20px_rgba(168,85,247,0.4)]"
                 >
-                  เลือกดูเกมทั้งหมด
+                  <Zap className="w-4 h-4 fill-current" />
+                  <span>ไปเลือกซื้อสินค้า</span>
                 </button>
               </div>
             ) : (
-              cart.map((item) => (
-                <div
-                  key={item.id}
-                  className="p-4 rounded-2xl bg-neutral-950/80 border border-neutral-800/80 flex flex-col gap-2.5 relative group"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <span className="text-[11px] font-bold text-cyan-400 uppercase tracking-wider block">
-                        {item.game.name}
-                      </span>
-                      <h4 className="text-sm font-bold text-white">{item.pkg.name}</h4>
-                      <p className="text-[11px] text-neutral-400 mt-0.5">
-                        ID: <span className="text-neutral-300 font-mono">{item.accountDetails.account}</span>
-                        {item.accountDetails.server && ` (${item.accountDetails.server})`}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => removeFromCart(item.id)}
-                      className="p-1.5 text-neutral-500 hover:text-red-400 transition"
-                      title="ลบรายการนี้"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-2 border-t border-neutral-900">
-                    <div className="flex items-center border border-neutral-800 bg-neutral-900 rounded-lg p-0.5">
-                      <button
-                        onClick={() => updateCartItemQuantity(item.id, item.quantity - 1)}
-                        className="p-1 text-neutral-400 hover:text-white"
-                      >
-                        <Minus className="w-3.5 h-3.5" />
-                      </button>
-                      <span className="w-8 text-center text-xs font-bold text-white">{item.quantity}</span>
-                      <button
-                        onClick={() => updateCartItemQuantity(item.id, item.quantity + 1)}
-                        className="p-1 text-neutral-400 hover:text-white"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-
-                    <span className="text-sm font-black text-cyan-400">
-                      ฿{(item.pkg.price * item.quantity).toLocaleString()}
-                    </span>
-                  </div>
+              <div className="space-y-4">
+                <div className="flex justify-between items-center text-xs font-bold text-violet-200 px-1">
+                  <span>รายการที่เลือก ({cart.length})</span>
+                  <button
+                    onClick={clearCart}
+                    className="text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1 font-bold cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>ล้างตะกร้า</span>
+                  </button>
                 </div>
-              ))
+
+                {cart.map((item) => {
+                  const lineTotal = item.unitPrice * item.quantity;
+                  return (
+                    <div
+                      key={item.id}
+                      className="p-4.5 rounded-2xl bg-[#120E24]/90 border border-violet-500/30 space-y-3.5 relative overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.6)]"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-3 min-w-0 flex-1">
+                          {item.imageUrl && (
+                            <div className="w-12 h-12 rounded-xl overflow-hidden bg-black/60 border border-violet-500/40 shrink-0 shadow-sm mt-1">
+                              <img src={item.imageUrl} alt={item.packageName} className="w-full h-full object-cover" />
+                            </div>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <span className="text-[11px] font-bold uppercase px-2.5 py-0.5 rounded-md bg-violet-950/80 text-violet-300 border border-violet-600/40">
+                              {item.gameName}
+                            </span>
+                            <h4 className="font-extrabold text-base text-white mt-1.5 leading-snug font-heading">
+                              {item.packageName}
+                            </h4>
+                            <p className="text-xs font-mono font-bold text-cyan-400 mt-1">
+                              User: {item.playerUid}
+                            </p>
+                            {item.playerNamePreview && (
+                              <p className="text-xs text-violet-200/80 font-medium mt-0.5">
+                                ตัวละคร: {item.playerNamePreview}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => removeFromCart(item.id)}
+                          className="p-2 rounded-xl text-violet-400 hover:text-rose-400 hover:bg-rose-950/40 transition-colors cursor-pointer"
+                          title="ลบรายการนี้"
+                        >
+                          <Trash2 className="w-4 h-4 stroke-[2.5]" />
+                        </button>
+                      </div>
+
+                      {/* Quantity & Price Row */}
+                      <div className="pt-3 border-t border-violet-500/20 flex items-center justify-between">
+                        {/* Quantity Stepper */}
+                        <div className="flex items-center gap-1.5 bg-[#0B0813] p-1 rounded-xl border border-violet-500/30">
+                          <button
+                            type="button"
+                            onClick={() => updateCartQuantity(item.id, item.quantity - 1)}
+                            className="w-7 h-7 rounded-lg bg-violet-900/60 hover:bg-violet-800 text-white flex items-center justify-center font-bold cursor-pointer"
+                          >
+                            <Minus className="w-3.5 h-3.5 stroke-[3]" />
+                          </button>
+                          <span className="w-8 text-center text-sm font-black font-mono text-cyan-400 tabular-nums">
+                            {item.quantity}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => updateCartQuantity(item.id, item.quantity + 1)}
+                            className="w-7 h-7 rounded-lg bg-violet-900/60 hover:bg-violet-800 text-white flex items-center justify-center font-bold cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                          </button>
+                        </div>
+
+                        <div className="text-right">
+                          <span className="text-[11px] text-violet-400/80 font-medium block tabular-nums">
+                            (฿{item.unitPrice.toLocaleString()} x {item.quantity})
+                          </span>
+                          <span className="font-mono font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-violet-300 text-lg tabular-nums">
+                            ฿{lineTotal.toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
 
-          {/* Footer Checkout */}
+          {/* Checkout Footer Form */}
           {cart.length > 0 && (
-            <div className="p-5 border-t border-neutral-800 bg-neutral-950/90 space-y-4">
+            <form
+              onSubmit={handleCheckout}
+              className="p-5 sm:p-6 border-t border-violet-500/25 bg-[#120E24] space-y-4"
+            >
+              {/* Payment Method Selector */}
               <div>
-                <label className="block text-xs font-medium text-neutral-300 mb-1">
-                  เบอร์โทรหรือช่องทางติดต่อสำหรับคำสั่งซื้อนี้
+                <label className="block text-xs font-bold text-violet-200 uppercase tracking-wider mb-2">
+                  เลือกวิธีชำระเงิน
                 </label>
-                <input
-                  type="text"
-                  placeholder="เช่น 089-xxx-xxxx หรือ @line"
-                  value={contact}
-                  onChange={(e) => setContact(e.target.value)}
-                  className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
-                />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-xs text-neutral-400 block">ยอดรวมทั้งสิ้น ({totalQuantity} แพ็ก)</span>
-                  <span className="text-2xl font-black text-white">฿{totalPrice.toLocaleString()}</span>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod('promptpay')}
+                    className={`py-2 px-2 rounded-xl text-xs font-bold text-center border transition-all cursor-pointer ${
+                      paymentMethod === 'promptpay'
+                        ? 'bg-gradient-to-r from-violet-600 to-cyan-500 text-white border-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.4)]'
+                        : 'bg-[#0B0813] border-violet-500/30 text-violet-200 hover:bg-violet-950/40'
+                    }`}
+                  >
+                    PromptPay
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod('truemoney')}
+                    className={`py-2 px-2 rounded-xl text-xs font-bold text-center border transition-all cursor-pointer ${
+                      paymentMethod === 'truemoney'
+                        ? 'bg-gradient-to-r from-violet-600 to-cyan-500 text-white border-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.4)]'
+                        : 'bg-[#0B0813] border-violet-500/30 text-violet-200 hover:bg-violet-950/40'
+                    }`}
+                  >
+                    TrueMoney
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod('bank_transfer')}
+                    className={`py-2 px-2 rounded-xl text-xs font-bold text-center border transition-all cursor-pointer ${
+                      paymentMethod === 'bank_transfer'
+                        ? 'bg-gradient-to-r from-violet-600 to-cyan-500 text-white border-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.4)]'
+                        : 'bg-[#0B0813] border-violet-500/30 text-violet-200 hover:bg-violet-950/40'
+                    }`}
+                  >
+                    ไทยพาณิชย์
+                  </button>
                 </div>
-                <button
-                  onClick={clearCart}
-                  className="text-xs text-neutral-500 hover:text-neutral-300 transition"
-                >
-                  ล้างตะกร้า
-                </button>
               </div>
 
+              {/* Price Calculations */}
+              <div className="pt-2 border-t border-violet-500/25 space-y-1.5 text-xs">
+                {totalSavings > 0 && (
+                  <div className="flex justify-between text-emerald-400 font-bold">
+                    <span>ประหยัดได้ทั้งหมด:</span>
+                    <span className="font-mono text-sm tabular-nums">-฿{totalSavings.toLocaleString()}</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-baseline pt-1">
+                  <span className="font-extrabold text-white text-base font-heading">ยอดชำระทั้งหมด:</span>
+                  <span className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-violet-300 font-mono tabular-nums drop-shadow-[0_0_15px_rgba(6,182,212,0.4)]">
+                    ฿{totalPrice.toLocaleString()}
+                  </span>
+                </div>
+              </div>
+
+              {/* Submit Checkout Button */}
               <button
-                onClick={handleCheckout}
-                disabled={isSubmitting}
-                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-cyan-500 to-teal-400 hover:from-cyan-400 hover:to-teal-300 text-neutral-950 font-black text-sm transition shadow-lg shadow-cyan-500/25 flex items-center justify-center gap-2 disabled:opacity-50"
+                type="submit"
+                className="w-full py-4 rounded-2xl neon-btn-purple text-base shadow-[0_0_25px_rgba(168,85,247,0.5)] flex items-center justify-center gap-2 transition-all cursor-pointer hover:scale-[1.01] font-heading"
               >
-                <span>{isSubmitting ? 'กำลังดำเนินการ...' : 'ยืนยันและชำระเงิน'}</span>
-                <ArrowRight className="w-4 h-4" />
+                <Zap className="w-5 h-5 fill-current" />
+                <span>ชำระเงินในตะกร้า ({cart.length} รายการ)</span>
               </button>
-            </div>
+            </form>
           )}
         </div>
       </div>

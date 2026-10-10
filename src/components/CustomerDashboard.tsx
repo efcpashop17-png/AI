@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import {
   TrendingUp,
@@ -37,12 +37,10 @@ import {
 } from 'lucide-react';
 import { TopUpOrder, TopUpStatus } from '../types';
 import { getOrderItems, formatOrderPackagesNotation, formatPackageQuantityTag } from '../utils/orderHelper';
-import { formatSafeDate, formatSafeTime } from '../utils/dateHelper';
 
 export const CustomerDashboard: React.FC = () => {
   const {
     orders,
-    deletedOrderIds,
     setActiveTab,
     setSelectedGame,
     games,
@@ -66,22 +64,6 @@ export const CustomerDashboard: React.FC = () => {
   const [viewingFullscreenImage, setViewingFullscreenImage] = useState<{ url: string; title: string } | null>(null);
   const [selectedOrderForCustomerReceipt, setSelectedOrderForCustomerReceipt] = useState<TopUpOrder | null>(null);
 
-  const isOrderDeleted = useCallback((id?: string) => {
-    if (!id) return false;
-    const clean = id.trim().toLowerCase();
-    return deletedOrderIds.some((d) => d.trim().toLowerCase() === clean);
-  }, [deletedOrderIds]);
-
-  // Auto-clear modals if selected order was deleted by admin
-  useEffect(() => {
-    if (selectedOrderForTimeline && (isOrderDeleted(selectedOrderForTimeline.id) || !orders.some((o) => o.id === selectedOrderForTimeline.id))) {
-      setSelectedOrderForTimeline(null);
-    }
-    if (selectedOrderForCustomerReceipt && (isOrderDeleted(selectedOrderForCustomerReceipt.id) || !orders.some((o) => o.id === selectedOrderForCustomerReceipt.id))) {
-      setSelectedOrderForCustomerReceipt(null);
-    }
-  }, [orders, deletedOrderIds, selectedOrderForTimeline, selectedOrderForCustomerReceipt, isOrderDeleted]);
-
   // Current month & year reference
   const now = new Date();
   const currentYear = now.getFullYear();
@@ -97,25 +79,24 @@ export const CustomerDashboard: React.FC = () => {
     const custEmail = currentCustomerUser.contactEmail?.toLowerCase().trim();
 
     return orders.filter((ord) => {
-      if (!ord || !ord.id || isOrderDeleted(ord.id)) return false;
       if (ord.customerId && ord.customerId === custId) return true;
       if (ord.username && ord.username.toLowerCase().trim() === custUser) return true;
       if (custPhone && custPhone !== '-' && ord.contactPhone && ord.contactPhone.trim() !== '-' && ord.contactPhone.trim() === custPhone) return true;
       if (custEmail && ord.contactEmail && ord.contactEmail.toLowerCase().trim() === custEmail) return true;
       return false;
     });
-  }, [orders, deletedOrderIds, currentCustomerUser, isOrderDeleted]);
+  }, [orders, currentCustomerUser]);
 
   // Logged-in customer ONLY sees their own matched orders. Admin sees all shop orders.
   const userOrders = useMemo(() => {
     if (isAdminLoggedIn) {
-      return orders.filter((o) => o && o.id && !isOrderDeleted(o.id));
+      return orders;
     }
     if (currentCustomerUser) {
-      return myMatchedOrders.filter((o) => o && o.id && !isOrderDeleted(o.id));
+      return myMatchedOrders;
     }
     return [];
-  }, [orders, deletedOrderIds, currentCustomerUser, isAdminLoggedIn, myMatchedOrders, isOrderDeleted]);
+  }, [orders, currentCustomerUser, isAdminLoggedIn, myMatchedOrders]);
 
   // Filtered orders for currently logged in user
   const filteredOrders = useMemo(() => {
@@ -1332,10 +1313,10 @@ export const CustomerDashboard: React.FC = () => {
                 </h3>
                 <div className="flex flex-wrap items-center gap-2 mt-1">
                   <span className="text-xs text-violet-200 font-medium">
-                    📅 วันที่: {formatSafeDate(selectedOrderForCustomerReceipt.createdAt, { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}
+                    📅 วันที่: {new Date(selectedOrderForCustomerReceipt.createdAt).toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}
                   </span>
                   <span className="text-xs text-cyan-300 font-bold font-mono">
-                    ⏰ เวลา: {formatSafeTime(selectedOrderForCustomerReceipt.createdAt, { hour: '2-digit', minute: '2-digit', second: '2-digit' })} น.
+                    ⏰ เวลา: {new Date(selectedOrderForCustomerReceipt.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' })} น.
                   </span>
                 </div>
               </div>
@@ -1378,14 +1359,14 @@ export const CustomerDashboard: React.FC = () => {
                           </span>
                         </div>
                         <span className="text-emerald-400 font-bold text-xs mt-0.5 block">
-                          ได้รับในเกม: {(item.totalItemAmount || 0).toLocaleString()} {item.inGameItem}
+                          ได้รับในเกม: {item.totalItemAmount.toLocaleString()} {item.inGameItem}
                         </span>
                       </div>
                     </div>
                     <div className="text-right">
-                      <span className="font-mono font-black text-amber-300 text-sm">฿{(item.totalPrice || 0).toLocaleString()}</span>
+                      <span className="font-mono font-black text-amber-300 text-sm">฿{item.totalPrice.toLocaleString()}</span>
                       {item.quantity > 1 && (
-                        <span className="text-[10px] text-violet-300/70 block">(ชิ้นละ ฿{(item.unitPrice || 0).toLocaleString()})</span>
+                        <span className="text-[10px] text-violet-300/70 block">(ชิ้นละ ฿{item.unitPrice.toLocaleString()})</span>
                       )}
                     </div>
                   </div>
@@ -1398,7 +1379,7 @@ export const CustomerDashboard: React.FC = () => {
               <div>
                 <span className="text-xs text-violet-300 font-bold block">ยอดชำระสุทธิ</span>
                 <span className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-fuchsia-300 font-mono">
-                  ฿{(selectedOrderForCustomerReceipt.price || 0).toLocaleString()}
+                  ฿{selectedOrderForCustomerReceipt.price.toLocaleString()}
                 </span>
               </div>
               <div className="text-right">

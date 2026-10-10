@@ -18,7 +18,7 @@ export const EFCPALogo: React.FC<EFCPALogoProps> = ({
     lg: "h-14 sm:h-16 w-auto",
     xl: "h-20 sm:h-24 w-auto",
   };
-  const imageSize = sizeMap[size];
+  const imageSize = sizeMap[size] || "h-11 w-auto";
 
   return (
     <div className={`inline-flex items-center select-none ${className}`}>

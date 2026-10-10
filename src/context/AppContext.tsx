@@ -48,7 +48,6 @@ import { formatPackageQuantityTag, formatOrderPackagesNotation, getOrderItems } 
 interface AppContextType {
   games: Game[];
   orders: TopUpOrder[];
-  deletedOrderIds: string[];
   dealers: Dealer[];
   webhookConfig: WebhookConfig;
   cart: CartItem[];
@@ -224,7 +223,14 @@ const LOCAL_STORAGE_PAYMENT_CONFIG = 'efcpa_payment_config_v2';
 const LOCAL_STORAGE_LOGO_URL = 'efcpa_shop_logo_url_v2';
 
 // Bot mock order blacklist - ensure NO fake/bot orders ever pollute customer or admin tracking
-export const BOT_ORDER_IDS = new Set<string>([]);
+export const BOT_ORDER_IDS = new Set([
+  'GP-892460', 'GP-892458', 'GP-892456', 'GP-892455', 'GP-892454', 'GP-892453', 'GP-892452',
+  'GP-892451', 'GP-892450', 'GP-892449', 'GP-892448', 'GP-892447', 'GP-892446', 'GP-892445',
+  'GP-892444', 'GP-892443', 'GP-892442', 'GP-892440', 'GP-892435', 'GP-892430', 'GP-892425',
+  'GP-892422', 'GP-892420', 'GP-892418', 'GP-892415', 'GP-892410', 'GP-892409', 'GP-892405',
+  'GP-892385', 'GP-892380', 'GP-892398', 'GP-892375', 'GP-892370', 'GP-892365', 'GP-892360',
+  'GP-892340', 'GP-892350', 'GP-892330', 'GP-892320', 'GP-TEST-SYNC-1'
+]);
 
 export const isBotOrder = (order: any): boolean => {
   if (!order || !order.id) return true;
@@ -235,19 +241,6 @@ export const isBotOrder = (order: any): boolean => {
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // Track last local game edit to prevent background sync from overwriting newly edited prices/names
   const lastLocalGameUpdateRef = useRef<number>(0);
-
-  // Helper to ensure each game has completely unique packages by package ID
-  const deduplicateGamePackages = useCallback((packages?: GamePackage[]): GamePackage[] => {
-    if (!Array.isArray(packages)) return [];
-    const seenIds = new Set<string>();
-    return packages.filter((pkg) => {
-      if (!pkg || !pkg.id) return false;
-      const cleanId = String(pkg.id).trim();
-      if (seenIds.has(cleanId)) return false;
-      seenIds.add(cleanId);
-      return true;
-    });
-  }, []);
 
   // Load Games
   const [games, setGames] = useState<Game[]>(() => {
@@ -261,22 +254,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
           const result: Game[] = parsed.map((pg: Game) => {
             const initG = INITIAL_GAMES.find((ig) => ig.id === pg.id);
-            const seenIds = new Set<string>();
-            const uniquePkgs = (pg.packages || initG?.packages || []).filter((p) => {
-              if (!p || !p.id) return false;
-              const cleanId = String(p.id).trim();
-              if (seenIds.has(cleanId)) return false;
-              seenIds.add(cleanId);
-              return true;
-            });
-
             return {
               ...initG,
               ...pg,
-              iconUrl: pg.iconUrl || initG?.iconUrl,
-              iconBgColor: pg.iconBgColor || initG?.iconBgColor,
-              bannerGradient: pg.bannerGradient || initG?.bannerGradient,
-              packages: uniquePkgs,
               thaiName: pg.thaiName || initG?.thaiName || pg.name,
               aliases: pg.aliases || initG?.aliases || [pg.name.toLowerCase()],
               todayRate: pg.todayRate !== undefined ? pg.todayRate : initG?.todayRate,
@@ -317,52 +297,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return [];
   });
 
-  const deletedOrderIdsRef = useRef<Set<string>>(new Set(deletedOrderIds.map((d) => String(d || '').trim().toLowerCase())));
-  useEffect(() => {
-    deletedOrderIds.forEach((id) => {
-      if (id) {
-        deletedOrderIdsRef.current.add(String(id).trim());
-        deletedOrderIdsRef.current.add(String(id).trim().toLowerCase());
-      }
-    });
-  }, [deletedOrderIds]);
-
-  const isOrderDeleted = useCallback((orderId?: string | null): boolean => {
-    if (!orderId) return false;
-    const clean = String(orderId).trim();
-    const lower = clean.toLowerCase();
-    if (deletedOrderIdsRef.current.has(clean) || deletedOrderIdsRef.current.has(lower)) return true;
-    return deletedOrderIds.some((d) => {
-      const dClean = String(d || '').trim().toLowerCase();
-      return dClean === lower || dClean === clean;
-    });
-  }, [deletedOrderIds]);
-
   // Load Orders with guaranteed persistence of real customer orders (Zero Bots)
   const [orders, setOrders] = useState<TopUpOrder[]>(() => {
     try {
-      const deletedSet = new Set<string>();
-      try {
-        const deletedSaved = localStorage.getItem(LOCAL_STORAGE_DELETED_ORDERS);
-        if (deletedSaved) {
-          const parsedDeleted = JSON.parse(deletedSaved);
-          if (Array.isArray(parsedDeleted)) {
-            parsedDeleted.forEach((id: string) => {
-              if (id) {
-                deletedSet.add(String(id).trim());
-                deletedSet.add(String(id).trim().toLowerCase());
-              }
-            });
-          }
-        }
-      } catch (_) {}
-
-      const isInitialDeleted = (id?: string) => {
-        if (!id) return true;
-        const clean = String(id).trim().toLowerCase();
-        return deletedSet.has(clean) || deletedSet.has(String(id).trim());
-      };
-
+      localStorage.removeItem(LOCAL_STORAGE_DELETED_ORDERS);
       const saved = localStorage.getItem(LOCAL_STORAGE_ORDERS);
       const vaultSaved = localStorage.getItem(LOCAL_STORAGE_VAULT);
       const orderMap = new Map<string, TopUpOrder>();
@@ -372,7 +310,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           const parsedVault: TopUpOrder[] = JSON.parse(vaultSaved);
           if (Array.isArray(parsedVault)) {
             parsedVault.forEach((o) => {
-              if (o && o.id && !isBotOrder(o) && !isInitialDeleted(o.id)) orderMap.set(o.id, o);
+              if (o && o.id && !isBotOrder(o)) orderMap.set(o.id, o);
             });
           }
         } catch (_) {}
@@ -382,7 +320,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           const parsed: TopUpOrder[] = JSON.parse(saved);
           if (Array.isArray(parsed)) {
             parsed.forEach((o) => {
-              if (o && o.id && !isBotOrder(o) && !isInitialDeleted(o.id)) {
+              if (o && o.id && !isBotOrder(o)) {
                 const notation = formatOrderPackagesNotation(o);
                 const cleanOrder = notation && (o.packageName?.includes('และอีก') || o.gameName?.includes('และอื่นๆ'))
                   ? { ...o, packageName: notation, gameName: o.gameName.replace(/ และอื่นๆ.*$/, '') }
@@ -392,13 +330,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             });
           }
         } catch (_) {}
-      }
-      if (orderMap.size === 0 && Array.isArray(INITIAL_TOPUP_ORDERS) && INITIAL_TOPUP_ORDERS.length > 0) {
-        INITIAL_TOPUP_ORDERS.forEach((o) => {
-          if (o && o.id && !isInitialDeleted(o.id)) {
-            orderMap.set(o.id, o);
-          }
-        });
       }
       const initialList = Array.from(orderMap.values());
       initialList.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
@@ -533,7 +464,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
 
       if (serverData.deletedOrderIds && Array.isArray(serverData.deletedOrderIds)) {
-        serverData.deletedOrderIds.forEach((id) => deletedOrderIdsRef.current.add(id));
         setDeletedOrderIds((prev) => {
           const merged = Array.from(new Set([...prev, ...serverData.deletedOrderIds]));
           try {
@@ -547,20 +477,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setOrders((prev) => {
           const map = new Map<string, TopUpOrder>();
           serverData.orders.forEach((o) => {
-            if (o && o.id && !isBotOrder(o) && !isOrderDeleted(o.id)) {
-              map.set(o.id, o);
-            }
+            if (o && o.id && !isBotOrder(o)) map.set(o.id, o);
           });
 
-          // Only preserve fresh in-flight local orders (< 30s) not yet saved on server
+          // Preserve all existing customer orders so no order is ever lost
           prev.forEach((o) => {
-            if (o && o.id && !isBotOrder(o) && !isOrderDeleted(o.id)) {
+            if (o && o.id && !isBotOrder(o) && !serverData.deletedOrderIds?.includes(o.id)) {
               if (!map.has(o.id)) {
-                const isFreshInFlight = o.createdAt && (Date.now() - new Date(o.createdAt).getTime() < 30000) && o.status === 'pending_payment';
-                if (isFreshInFlight) {
-                  map.set(o.id, o);
-                  saveOrderToServer(o);
-                }
+                map.set(o.id, o);
+                saveOrderToServer(o);
               }
             }
           });
@@ -572,8 +497,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           } catch (_) {}
           return merged;
         });
-
-        setLastCompletedOrder((prev) => (prev && isOrderDeleted(prev.id) ? null : prev));
       }
 
       if (serverData.customers && serverData.customers.length > 0) {
@@ -621,49 +544,37 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const refreshOrders = useCallback(async () => {
     try {
-      const serverData = await fetchServerData();
-      if (serverData && Array.isArray(serverData.orders)) {
-        if (serverData.deletedOrderIds && Array.isArray(serverData.deletedOrderIds)) {
-          serverData.deletedOrderIds.forEach((id) => deletedOrderIdsRef.current.add(id));
-          setDeletedOrderIds((prev) => {
-            const merged = Array.from(new Set([...prev, ...serverData.deletedOrderIds]));
-            try {
-              localStorage.setItem(LOCAL_STORAGE_DELETED_ORDERS, JSON.stringify(merged));
-            } catch (_) {}
-            return merged;
-          });
-        }
+      const res = await fetch(`/api/data/orders?_t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache, no-store' },
+      });
+      if (res.ok) {
+        const serverOrders: TopUpOrder[] = await res.json();
+        if (Array.isArray(serverOrders)) {
+          setOrders((prev) => {
+            const map = new Map<string, TopUpOrder>();
+            serverOrders.forEach((o) => {
+              if (o && o.id && !isBotOrder(o)) map.set(o.id, o);
+            });
 
-        setOrders((prev) => {
-          const map = new Map<string, TopUpOrder>();
-          serverData.orders.forEach((o) => {
-            if (o && o.id && !isBotOrder(o) && !isOrderDeleted(o.id)) {
-              map.set(o.id, o);
-            }
-          });
-
-          // Only preserve fresh in-flight local orders (< 30s) not yet saved on server
-          prev.forEach((o) => {
-            if (o && o.id && !isBotOrder(o) && !isOrderDeleted(o.id)) {
-              if (!map.has(o.id)) {
-                const isFreshInFlight = o.createdAt && (Date.now() - new Date(o.createdAt).getTime() < 30000) && o.status === 'pending_payment';
-                if (isFreshInFlight) {
+            // Keep all existing orders
+            prev.forEach((o) => {
+              if (o && o.id && !isBotOrder(o)) {
+                if (!map.has(o.id)) {
                   map.set(o.id, o);
                   saveOrderToServer(o);
                 }
               }
-            }
+            });
+            const updated = Array.from(map.values());
+            updated.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+            try {
+              localStorage.setItem(LOCAL_STORAGE_ORDERS, JSON.stringify(updated));
+              localStorage.setItem(LOCAL_STORAGE_VAULT, JSON.stringify(updated));
+            } catch (_) {}
+            return updated;
           });
-          const updated = Array.from(map.values());
-          updated.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-          try {
-            localStorage.setItem(LOCAL_STORAGE_ORDERS, JSON.stringify(updated));
-            localStorage.setItem(LOCAL_STORAGE_VAULT, JSON.stringify(updated));
-          } catch (_) {}
-          return updated;
-        });
-
-        setLastCompletedOrder((prev) => (prev && isOrderDeleted(prev.id) ? null : prev));
+        }
       }
     } catch (err) {
       console.warn('Failed to refresh orders from server', err);
@@ -773,38 +684,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     // 1. Instant Real-Time Push via Server-Sent Events (SSE)
     const unsubscribeSSE = subscribeToLiveEvents({
-      onOrdersUpdated: (serverOrders, deletedId, serverDeletedIds) => {
+      onOrdersUpdated: (serverOrders) => {
         if (!active || !Array.isArray(serverOrders)) return;
-
-        const newDeleted = [
-          ...(deletedId ? [deletedId] : []),
-          ...(Array.isArray(serverDeletedIds) ? serverDeletedIds : []),
-        ];
-        if (newDeleted.length > 0) {
-          newDeleted.forEach((id) => deletedOrderIdsRef.current.add(id));
-          setDeletedOrderIds((prev) => {
-            const merged = Array.from(new Set([...prev, ...newDeleted]));
-            try {
-              localStorage.setItem(LOCAL_STORAGE_DELETED_ORDERS, JSON.stringify(merged));
-            } catch (_) {}
-            return merged;
-          });
-        }
 
         setOrders((prev) => {
           const map = new Map<string, TopUpOrder>();
           // Server disk is source of truth
           serverOrders.forEach((o) => {
-            if (o && o.id && !isBotOrder(o) && !isOrderDeleted(o.id)) {
-              map.set(o.id, o);
-            }
+            if (o && o.id && !isBotOrder(o)) map.set(o.id, o);
           });
 
           // Detect if any brand new orders arrived that were not in prev
           const prevIds = new Set(prev.map((o) => o.id));
-          const newIncomingOrders = serverOrders.filter(
-            (o) => !prevIds.has(o.id) && !isBotOrder(o) && !isOrderDeleted(o.id)
-          );
+          const newIncomingOrders = serverOrders.filter((o) => !prevIds.has(o.id) && !isBotOrder(o));
           if (newIncomingOrders.length > 0 && isAdminLoggedIn) {
             soundService.playNotificationSound();
             const first = newIncomingOrders[0];
@@ -814,15 +706,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             });
           }
 
-          // Only preserve fresh in-flight local orders (< 30s) not yet saved on server; never resurrect deleted orders
+          // Keep all existing customer orders safe and never drop
           prev.forEach((o) => {
-            if (o && o.id && !isBotOrder(o) && !isOrderDeleted(o.id)) {
+            if (o && o.id && !isBotOrder(o)) {
               if (!map.has(o.id)) {
-                const isFreshInFlight = o.createdAt && (Date.now() - new Date(o.createdAt).getTime() < 30000) && o.status === 'pending_payment';
-                if (isFreshInFlight) {
-                  map.set(o.id, o);
-                  saveOrderToServer(o);
-                }
+                map.set(o.id, o);
+                saveOrderToServer(o);
               }
             }
           });
@@ -835,8 +724,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           } catch (_) {}
           return mergedOrders;
         });
-
-        setLastCompletedOrder((prev) => (prev && deletedOrderIdsRef.current.has(prev.id) ? null : prev));
       },
       onGamesUpdated: (serverGames) => {
         if (!active || !Array.isArray(serverGames) || serverGames.length === 0) return;
@@ -922,48 +809,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
 
         // 3. Sync orders across all devices
-        if (serverData.deletedOrderIds && Array.isArray(serverData.deletedOrderIds)) {
-          serverData.deletedOrderIds.forEach((id) => deletedOrderIdsRef.current.add(id));
-          setDeletedOrderIds((prev) => {
-            const merged = Array.from(new Set([...prev, ...serverData.deletedOrderIds!]));
-            try {
-              localStorage.setItem(LOCAL_STORAGE_DELETED_ORDERS, JSON.stringify(merged));
-            } catch (_) {}
-            return merged;
-          });
-        }
         if (serverData.orders && Array.isArray(serverData.orders)) {
           setOrders((prev) => {
             const map = new Map<string, TopUpOrder>();
-            serverData.orders!.forEach((o) => {
-              if (o && o.id && !isBotOrder(o) && !isOrderDeleted(o.id)) {
-                map.set(o.id, o);
-              }
+            serverData.orders.forEach((o) => {
+              if (o && o.id && !isBotOrder(o)) map.set(o.id, o);
             });
 
-            // Detect if any brand new orders arrived that were not in prev
-            const prevIds = new Set(prev.map((o) => o.id));
-            const newIncomingOrders = serverData.orders!.filter(
-              (o) => !prevIds.has(o.id) && !isBotOrder(o) && !isOrderDeleted(o.id)
-            );
-            if (newIncomingOrders.length > 0 && isAdminLoggedIn) {
-              soundService.playNotificationSound();
-              const first = newIncomingOrders[0];
-              setNotificationState({
-                type: 'info',
-                message: `🔔 มีคำสั่งซื้อใหม่จากลูกค้า! รหัส ${first.id} (${first.gameName} - ฿${first.price.toLocaleString()})`,
-              });
-            }
-
-            // Only keep fresh in-flight local orders (< 30s) not yet saved on server; never resurrect deleted orders
+            // Preserve all existing customer orders and auto-upload un-synced orders
             prev.forEach((o) => {
-              if (o && o.id && !isBotOrder(o) && !isOrderDeleted(o.id)) {
+              if (o && o.id && !isBotOrder(o)) {
                 if (!map.has(o.id)) {
-                  const isFreshInFlight = o.createdAt && (Date.now() - new Date(o.createdAt).getTime() < 30000) && o.status === 'pending_payment';
-                  if (isFreshInFlight) {
-                    map.set(o.id, o);
-                    saveOrderToServer(o);
-                  }
+                  map.set(o.id, o);
+                  saveOrderToServer(o);
                 }
               }
             });
@@ -981,7 +839,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             }
             return prev;
           });
-          setLastCompletedOrder((prev) => (prev && deletedOrderIdsRef.current.has(prev.id) ? null : prev));
         }
 
         // 4. Sync Customer Users across all devices (Never let users vanish)
@@ -1603,82 +1460,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Delete Order (ลบออเดอร์ออกจากระบบและเซิร์ฟเวอร์ถาวร)
   const deleteOrder = async (orderId: string): Promise<boolean> => {
-    if (!orderId) return false;
-    const cleanId = orderId.trim();
-    const lowerId = cleanId.toLowerCase();
-
-    // 1. Immediately register in deleted blacklist ref, state and localStorage
-    deletedOrderIdsRef.current.add(cleanId);
-    deletedOrderIdsRef.current.add(lowerId);
-    setDeletedOrderIds((prev) => {
-      const next = Array.from(new Set([...prev, cleanId, lowerId]));
-      try {
-        localStorage.setItem(LOCAL_STORAGE_DELETED_ORDERS, JSON.stringify(next));
-      } catch (_) {}
-      return next;
-    });
-
-    // 2. Clear lastCompletedOrder if matching
-    setLastCompletedOrder((prev) => {
-      if (prev?.id && (prev.id.trim() === cleanId || prev.id.trim().toLowerCase() === lowerId)) {
-        setIsOrderSuccessModalOpen(false);
-        return null;
-      }
-      return prev;
-    });
-
-    // 3. Immediately remove from local state and update BOTH localStorage and permanent vault
+    // 1. Immediately remove from local state and update localStorage
     setOrders((prev) => {
-      const remaining = prev.filter((o) => {
-        if (!o || !o.id) return false;
-        const oClean = o.id.trim().toLowerCase();
-        return oClean !== lowerId && oClean !== cleanId.toLowerCase();
-      });
+      const remaining = prev.filter((o) => o.id !== orderId);
       try {
         localStorage.setItem(LOCAL_STORAGE_ORDERS, JSON.stringify(remaining));
-        localStorage.setItem(LOCAL_STORAGE_VAULT, JSON.stringify(remaining));
       } catch (_) {}
       return remaining;
     });
 
-    // 4. Clean out from any possible legacy or emergency storage keys
+    // 2. Delete permanently on server disk
     try {
-      const storageKeys = [
-        LOCAL_STORAGE_ORDERS,
-        LOCAL_STORAGE_VAULT,
-        'gamepay_orders_v1',
-        'efcpa_orders_v1',
-        'efcpa_orders_vault_permanent',
-        'efcpa_emergency_orders_backup_v1',
-      ];
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (k && (k.includes('order') || k.includes('Order')) && !storageKeys.includes(k) && k !== LOCAL_STORAGE_DELETED_ORDERS) {
-          storageKeys.push(k);
-        }
-      }
-      for (const k of storageKeys) {
-        try {
-          const raw = localStorage.getItem(k);
-          if (!raw) continue;
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed)) {
-            const filtered = parsed.filter((item: any) => {
-              if (!item || !item.id) return true;
-              const itemIdClean = String(item.id).trim().toLowerCase();
-              return itemIdClean !== lowerId;
-            });
-            localStorage.setItem(k, JSON.stringify(filtered));
-          } else if (parsed && parsed.id && String(parsed.id).trim().toLowerCase() === lowerId) {
-            localStorage.removeItem(k);
-          }
-        } catch (_) {}
-      }
-    } catch (_) {}
-
-    // 5. Delete permanently on server disk
-    try {
-      await deleteOrderFromServer(cleanId);
+      await deleteOrderFromServer(orderId);
     } catch (e) {
       console.warn('Failed to delete order on server:', e);
     }
@@ -1686,7 +1479,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     soundService.playNotificationSound();
     setNotification({
       type: 'info',
-      message: `ลบออเดอร์ ${cleanId} ออกจากระบบและประวัติลูกค้าเรียบร้อยแล้ว`,
+      message: `ลบออเดอร์ ${orderId} ออกจากระบบเรียบร้อยแล้ว`,
     });
     return true;
   };
@@ -1903,10 +1696,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const updatedGames = games.map((game) => {
       if (game.id !== gameId) return game;
-      const filtered = (game.packages || []).filter((p) => p.id !== newPkg.id);
       return {
         ...game,
-        packages: deduplicateGamePackages([...filtered, newPkg]),
+        packages: [...game.packages, newPkg],
       };
     });
 
@@ -1918,6 +1710,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
 
     saveGamesToServer(updatedGames);
+    addPackageToServer(gameId, newPkg);
 
     setNotification({
       type: 'success',
@@ -2724,7 +2517,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const parsed = JSON.parse(val);
         const list = Array.isArray(parsed) ? parsed : [parsed];
         for (const item of list) {
-          if (item && item.id && !isBotOrder(item) && !isOrderDeleted(item.id) && (item.playerUid || item.price)) {
+          if (item && item.id && !isBotOrder(item) && (item.playerUid || item.price)) {
             candidates.set(item.id, item);
           }
         }
@@ -2734,9 +2527,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (candidates.size > 0) {
       setOrders((prev) => {
         const map = new Map<string, TopUpOrder>();
-        prev.filter((o) => !isBotOrder(o) && !isOrderDeleted(o.id)).forEach((o) => map.set(o.id, o));
+        prev.filter((o) => !isBotOrder(o)).forEach((o) => map.set(o.id, o));
         candidates.forEach((cand, id) => {
-          if (!map.has(id) && !isOrderDeleted(id)) {
+          if (!map.has(id)) {
             map.set(id, cand);
             saveOrderToServer(cand, 5);
             recoveredCount++;
@@ -2871,7 +2664,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       value={{
         games,
         orders,
-        deletedOrderIds,
         dealers,
         webhookConfig,
         cart,
