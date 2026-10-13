@@ -450,6 +450,7 @@ export const AdminDashboard: React.FC = () => {
   const [deliveryProofModalOrder, setDeliveryProofModalOrder] = useState<TopUpOrder | null>(null);
   const [preDeliveryImg, setPreDeliveryImg] = useState<string>('');
   const [postDeliveryImg, setPostDeliveryImg] = useState<string>('');
+  const [isSavingProof, setIsSavingProof] = useState<boolean>(false);
   const [viewingProofFullscreen, setViewingProofFullscreen] = useState<{ url: string; title: string } | null>(null);
   const preDeliveryFileInputRef = useRef<HTMLInputElement>(null);
   const postDeliveryFileInputRef = useRef<HTMLInputElement>(null);

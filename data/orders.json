@@ -35,7 +35,10 @@
       }
     ],
     "createdAt": "2026-10-01T07:30:00Z",
-    "updatedAt": "2026-10-01T07:31:05Z"
+    "updatedAt": "2026-10-01T07:31:05Z",
+    "preDeliveryImageUrl": "/uploads/test_pre_GP-892398_1791921097922_smvfa.svg",
+    "postDeliveryImageUrl": "/uploads/test_post_GP-892398_1791921097927_86tig.svg",
+    "deliveryProofUploadedAt": "2026-10-13T19:51:37.930Z"
   },
   {
     "id": "GP-892410",

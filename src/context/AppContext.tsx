@@ -40,6 +40,7 @@ import {
   saveSingleGameToServer,
   addPackageToServer,
   deletePackageFromServer,
+  uploadImageToServer,
   subscribeToLiveEvents,
 } from '../services/persistentStorageService';
 import { PAYMENT_CONFIG } from '../utils/promptpay';
@@ -181,7 +182,7 @@ interface AppContextType {
   adminUploadDeliveryProof: (
     orderId: string,
     proofs: { preDeliveryImageUrl?: string; postDeliveryImageUrl?: string }
-  ) => void;
+  ) => Promise<boolean>;
   attachSlipAndMarkPaid: (orderId: string, slipUrl: string) => void;
   resetAllData: () => void;
 
@@ -2369,57 +2370,105 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
   };
 
-  // แอดมินอัปโหลดและเชื่อมโยงภาพหลักฐานการจัดส่งสินค้า (ภาพก่อนส่ง และ ภาพหลังส่ง)
-  const adminUploadDeliveryProof = (
+  // แอดมินอัปโหลดและเชื่อมโยงภาพหลักฐานการจัดส่งสินค้า (ภาพก่อนส่ง และ ภาพหลังส่ง) บันทึกลงเซิร์ฟเวอร์ถาวร
+  const adminUploadDeliveryProof = async (
     orderId: string,
     proofs: { preDeliveryImageUrl?: string; postDeliveryImageUrl?: string }
-  ) => {
-    const timeStr = new Date().toLocaleTimeString('th-TH');
-    const nowIso = new Date().toISOString();
-    soundService.playStatusUpdateSound();
-    setOrders((prev) =>
-      prev.map((ord) => {
-        if (ord.id !== orderId) return ord;
-        const updatedOrd: TopUpOrder = {
-          ...ord,
-          preDeliveryImageUrl:
-            proofs.preDeliveryImageUrl !== undefined
-              ? proofs.preDeliveryImageUrl
-              : ord.preDeliveryImageUrl,
-          postDeliveryImageUrl:
-            proofs.postDeliveryImageUrl !== undefined
-              ? proofs.postDeliveryImageUrl
-              : ord.postDeliveryImageUrl,
-          deliveryProofUploadedAt: nowIso,
-          deliveredBy: 'แอดมิน',
-          updatedAt: nowIso,
-        };
+  ): Promise<boolean> => {
+    try {
+      const timeStr = new Date().toLocaleTimeString("th-TH");
+      const nowIso = new Date().toISOString();
 
-        const hasProofTimeline = updatedOrd.timeline.some((t) =>
-          t.description.includes('หลักฐานการจัดส่ง')
-        );
-        if (
-          !hasProofTimeline &&
-          (proofs.preDeliveryImageUrl || proofs.postDeliveryImageUrl)
-        ) {
-          updatedOrd.timeline = [
-            ...updatedOrd.timeline,
-            {
-              id: `step_${Date.now()}_proof`,
-              status: updatedOrd.status,
-              time: timeStr,
-              description: `📸 แอดมินได้แนบภาพหลักฐานการจัดส่งสินค้า (ก่อนส่ง / หลังส่ง) เรียบร้อยแล้ว`,
-              actor: 'admin',
-            },
-          ];
+      let finalPreUrl = proofs.preDeliveryImageUrl !== undefined ? proofs.preDeliveryImageUrl : undefined;
+      let finalPostUrl = proofs.postDeliveryImageUrl !== undefined ? proofs.postDeliveryImageUrl : undefined;
+
+      // 1. Upload pre-delivery image to permanent server disk if base64 data URL
+      if (finalPreUrl && finalPreUrl.startsWith("data:image/")) {
+        try {
+          finalPreUrl = await uploadImageToServer(finalPreUrl, `proof_pre_${orderId}`);
+        } catch (e) {
+          console.warn("Pre-delivery upload error, using data url:", e);
         }
-        return updatedOrd;
-      })
-    );
-    setNotification({
-      type: 'success',
-      message: `บันทึกรูปภาพหลักฐานการจัดส่งสำหรับ ${orderId} สำเร็จแล้ว`,
-    });
+      }
+
+      // 2. Upload post-delivery image to permanent server disk if base64 data URL
+      if (finalPostUrl && finalPostUrl.startsWith("data:image/")) {
+        try {
+          finalPostUrl = await uploadImageToServer(finalPostUrl, `proof_post_${orderId}`);
+        } catch (e) {
+          console.warn("Post-delivery upload error, using data url:", e);
+        }
+      }
+
+      let updatedTargetOrder: TopUpOrder | null = null;
+
+      // 3. Update React state & localStorage
+      setOrders((prev) => {
+        const next = prev.map((ord) => {
+          if (ord.id !== orderId) return ord;
+
+          const updatedOrd: TopUpOrder = {
+            ...ord,
+            preDeliveryImageUrl:
+              finalPreUrl !== undefined ? finalPreUrl : ord.preDeliveryImageUrl,
+            postDeliveryImageUrl:
+              finalPostUrl !== undefined ? finalPostUrl : ord.postDeliveryImageUrl,
+            deliveryProofUploadedAt: nowIso,
+            deliveredBy: "แอดมิน",
+            updatedAt: nowIso,
+          };
+
+          const hasProofTimeline = updatedOrd.timeline.some((t) =>
+            t.description.includes("หลักฐานการจัดส่ง")
+          );
+
+          if (
+            !hasProofTimeline &&
+            (finalPreUrl || finalPostUrl || ord.preDeliveryImageUrl || ord.postDeliveryImageUrl)
+          ) {
+            updatedOrd.timeline = [
+              ...updatedOrd.timeline,
+              {
+                id: `step_${Date.now()}_proof`,
+                status: updatedOrd.status,
+                time: timeStr,
+                description: `📸 แอดมินได้แนบภาพหลักฐานการจัดส่งสินค้า (ก่อนส่ง / หลังส่ง) เรียบร้อยแล้ว`,
+                actor: "admin",
+              },
+            ];
+          }
+
+          updatedTargetOrder = updatedOrd;
+          return updatedOrd;
+        });
+
+        try {
+          localStorage.setItem(LOCAL_STORAGE_ORDERS, JSON.stringify(next));
+          localStorage.setItem(LOCAL_STORAGE_VAULT, JSON.stringify(next));
+        } catch (_) {}
+
+        return next;
+      });
+
+      // 4. Save directly to server disk so it never bounces away on 3s sync
+      if (updatedTargetOrder) {
+        await saveOrderToServer(updatedTargetOrder, 5);
+      }
+
+      soundService.playStatusUpdateSound();
+      setNotification({
+        type: "success",
+        message: `บันทึกรูปภาพหลักฐานการจัดส่งสำหรับ ${orderId} สำเร็จแล้ว`,
+      });
+      return true;
+    } catch (err: any) {
+      console.error("Failed to save delivery proof:", err);
+      setNotification({
+        type: "error",
+        message: `เกิดข้อผิดพลาดในการบันทึกรูปหลักฐาน: ${err?.message || String(err)}`,
+      });
+      return false;
+    }
   };
 
   // Reset non-critical temporary session data safely without wiping games or custom orders

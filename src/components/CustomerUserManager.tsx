@@ -50,6 +50,8 @@ export const CustomerUserManager: React.FC = () => {
   const [adjustAmount, setAdjustAmount] = useState<string>('');
   const [adjustType, setAdjustType] = useState<'add' | 'subtract'>('add');
   const [adjustNote, setAdjustNote] = useState<string>('');
+  const [userToDelete, setUserToDelete] = useState<CustomerUser | null>(null);
+  const [isDeletingUser, setIsDeletingUser] = useState<boolean>(false);
 
   // Password visibility map
   const [showPasswordMap, setShowPasswordMap] = useState<Record<string, boolean>>({});
@@ -196,6 +198,17 @@ export const CustomerUserManager: React.FC = () => {
       type: 'success',
       message: `บันทึกการแก้ไขยูสเซอร์ @${cleanUsername} เรียบร้อยแล้ว`,
     });
+  };
+
+  const handleConfirmDeleteUser = async () => {
+    if (!userToDelete) return;
+    setIsDeletingUser(true);
+    try {
+      deleteCustomerUser(userToDelete.id);
+      setUserToDelete(null);
+    } finally {
+      setIsDeletingUser(false);
+    }
   };
 
   const handleAdjustBalanceSubmit = (e: React.FormEvent) => {
@@ -531,11 +544,8 @@ export const CustomerUserManager: React.FC = () => {
                           </button>
 
                           <button
-                            onClick={() => {
-                              if (confirm(`คุณต้องการลบยูสเซอร์ "${user.username}" หรือไม่?`)) {
-                                deleteCustomerUser(user.id);
-                              }
-                            }}
+                            type="button"
+                            onClick={() => setUserToDelete(user)}
                             title="ลบยูสเซอร์นี้"
                             className="p-1.5 rounded-lg bg-rose-950/40 text-rose-400 hover:text-white hover:bg-rose-600 transition-colors cursor-pointer"
                           >
