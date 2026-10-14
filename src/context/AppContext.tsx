@@ -181,7 +181,8 @@ interface AppContextType {
   adminUploadSlip: (orderId: string, slipUrl: string) => void;
   adminUploadDeliveryProof: (
     orderId: string,
-    proofs: { preDeliveryImageUrl?: string; postDeliveryImageUrl?: string }
+    proofs: { preDeliveryImageUrl?: string; postDeliveryImageUrl?: string },
+    options?: { markCompleted?: boolean; note?: string }
   ) => Promise<boolean>;
   attachSlipAndMarkPaid: (orderId: string, slipUrl: string) => void;
   resetAllData: () => void;
@@ -2373,7 +2374,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // แอดมินอัปโหลดและเชื่อมโยงภาพหลักฐานการจัดส่งสินค้า (ภาพก่อนส่ง และ ภาพหลังส่ง) บันทึกลงเซิร์ฟเวอร์ถาวร
   const adminUploadDeliveryProof = async (
     orderId: string,
-    proofs: { preDeliveryImageUrl?: string; postDeliveryImageUrl?: string }
+    proofs: { preDeliveryImageUrl?: string; postDeliveryImageUrl?: string },
+    options?: { markCompleted?: boolean; note?: string }
   ): Promise<boolean> => {
     try {
       const timeStr = new Date().toLocaleTimeString("th-TH");
@@ -2400,44 +2402,57 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
       }
 
+      const shouldComplete = !!options?.markCompleted;
       let updatedTargetOrder: TopUpOrder | null = null;
 
-      // 3. Update React state & localStorage
+      // 3. Update React state & localStorage atomically (Status + Images in SAME update!)
       setOrders((prev) => {
         const next = prev.map((ord) => {
           if (ord.id !== orderId) return ord;
 
+          const newStatus: TopUpStatus = shouldComplete ? "completed" : ord.status;
           const updatedOrd: TopUpOrder = {
             ...ord,
+            status: newStatus,
             preDeliveryImageUrl:
               finalPreUrl !== undefined ? finalPreUrl : ord.preDeliveryImageUrl,
             postDeliveryImageUrl:
               finalPostUrl !== undefined ? finalPostUrl : ord.postDeliveryImageUrl,
             deliveryProofUploadedAt: nowIso,
             deliveredBy: "แอดมิน",
+            paymentStatus: shouldComplete ? "paid" : ord.paymentStatus,
+            adminNote: options?.note || ord.adminNote,
             updatedAt: nowIso,
           };
 
-          const hasProofTimeline = updatedOrd.timeline.some((t) =>
+          const newTimelineSteps = [...ord.timeline];
+          const hasProofTimeline = newTimelineSteps.some((t) =>
             t.description.includes("หลักฐานการจัดส่ง")
           );
-
           if (
             !hasProofTimeline &&
             (finalPreUrl || finalPostUrl || ord.preDeliveryImageUrl || ord.postDeliveryImageUrl)
           ) {
-            updatedOrd.timeline = [
-              ...updatedOrd.timeline,
-              {
-                id: `step_${Date.now()}_proof`,
-                status: updatedOrd.status,
-                time: timeStr,
-                description: `📸 แอดมินได้แนบภาพหลักฐานการจัดส่งสินค้า (ก่อนส่ง / หลังส่ง) เรียบร้อยแล้ว`,
-                actor: "admin",
-              },
-            ];
+            newTimelineSteps.push({
+              id: `step_${Date.now()}_proof`,
+              status: newStatus,
+              time: timeStr,
+              description: `📸 แอดมินได้แนบภาพหลักฐานการจัดส่งสินค้า (ก่อนส่ง / หลังส่ง) เรียบร้อยแล้ว`,
+              actor: "admin",
+            });
           }
 
+          if (shouldComplete && ord.status !== "completed") {
+            newTimelineSteps.push({
+              id: `step_${Date.now()}_comp`,
+              status: "completed",
+              time: timeStr,
+              description: options?.note || "ส่งสำเร็จเเล้ว (แนบภาพหลักฐานจัดส่งเรียบร้อย)",
+              actor: "admin",
+            });
+          }
+
+          updatedOrd.timeline = newTimelineSteps;
           updatedTargetOrder = updatedOrd;
           return updatedOrd;
         });
@@ -2450,15 +2465,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return next;
       });
 
-      // 4. Save directly to server disk so it never bounces away on 3s sync
+      // 4. Save directly to server disk atomically so it never bounces away on 3s sync
       if (updatedTargetOrder) {
         await saveOrderToServer(updatedTargetOrder, 5);
+        if (shouldComplete) {
+          triggerWebhookAlert(updatedTargetOrder, "delivered");
+        }
       }
 
       soundService.playStatusUpdateSound();
       setNotification({
         type: "success",
-        message: `บันทึกรูปภาพหลักฐานการจัดส่งสำหรับ ${orderId} สำเร็จแล้ว`,
+        message: shouldComplete
+          ? `บันทึกรูปหลักฐานและปรับสถานะ ${orderId} เป็น "ส่งสำเร็จเเล้ว" เรียบร้อย`
+          : `บันทึกรูปภาพหลักฐานการจัดส่งสำหรับ ${orderId} สำเร็จแล้ว`,
       });
       return true;
     } catch (err: any) {

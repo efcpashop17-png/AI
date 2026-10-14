@@ -94,7 +94,10 @@
       }
     ],
     "bonusAmount": 15,
-    "updatedAt": "2026-10-01T07:46:12Z"
+    "updatedAt": "2026-10-01T07:46:12Z",
+    "preDeliveryImageUrl": "/uploads/proof_pre_GP-892410_1791940376792_mhsho.jpg",
+    "postDeliveryImageUrl": "/uploads/proof_post_GP-892410_1791940376807_h35bh.jpg",
+    "deliveryProofUploadedAt": "2026-10-14T01:12:56.815Z"
   },
   {
     "id": "GP-892409",

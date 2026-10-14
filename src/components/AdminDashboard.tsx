@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
+import { compressImageFile } from '../utils/imageCompressor';
 import {
   ShieldCheck,
   Lock,
@@ -461,34 +462,36 @@ export const AdminDashboard: React.FC = () => {
     setPostDeliveryImg(ord.postDeliveryImageUrl || '');
   };
 
-  const handlePreDeliveryFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePreDeliveryFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 10 * 1024 * 1024) {
-      setNotification({ type: 'error', message: 'ขนาดไฟล์ภาพเกิน 10MB' });
-      return;
+    try {
+      const compressed = await compressImageFile(file, 1000, 1000, 0.82);
+      setPreDeliveryImg(compressed);
+    } catch (_) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const res = ev.target?.result as string;
+        if (res) setPreDeliveryImg(res);
+      };
+      reader.readAsDataURL(file);
     }
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const res = ev.target?.result as string;
-      if (res) setPreDeliveryImg(res);
-    };
-    reader.readAsDataURL(file);
   };
 
-  const handlePostDeliveryFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePostDeliveryFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 10 * 1024 * 1024) {
-      setNotification({ type: 'error', message: 'ขนาดไฟล์ภาพเกิน 10MB' });
-      return;
+    try {
+      const compressed = await compressImageFile(file, 1000, 1000, 0.82);
+      setPostDeliveryImg(compressed);
+    } catch (_) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const res = ev.target?.result as string;
+        if (res) setPostDeliveryImg(res);
+      };
+      reader.readAsDataURL(file);
     }
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const res = ev.target?.result as string;
-      if (res) setPostDeliveryImg(res);
-    };
-    reader.readAsDataURL(file);
   };
 
   const handleSaveDeliveryProof = (markCompleted: boolean = false) => {
